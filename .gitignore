@@ -1,0 +1,9 @@
+*.o
+/ShearDemo_SAD
+/Data_virtual exp_holes
+/binn
+/data
+*.npy
+*.so
+*.ipynb_checkpoints
+__pycache__
