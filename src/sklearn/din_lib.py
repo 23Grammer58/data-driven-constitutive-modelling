@@ -30,7 +30,7 @@ def response():
 
         
 
-    with open("../../file.txt", "w") as file:
+    with open("test/file.txt", "w") as file:
         file.write(str(dpsi1))
         file.write(" ")
         file.write(str(dpsi2))

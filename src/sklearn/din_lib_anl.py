@@ -15,7 +15,7 @@ def response():
     dpsi1 = 6600 / 2 
     dpsi2 = - 3300 / I2 ** 2 
 
-    with open("../../file.txt", "w") as file:
+    with open("test/file.txt", "w") as file:
         file.write(str(dpsi1))
         file.write(" ")
         file.write(str(dpsi2))
