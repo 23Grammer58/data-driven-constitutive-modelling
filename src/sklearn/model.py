@@ -14,7 +14,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.metrics import mean_squared_error 
 
-# from p_k_2 import piola_kirchgoff_2
+# from p_k_2 import piola_kirchg`off_2
 
 #load dataset
 def load_data(path="biaxial_three_different_holes.xlsx", validation=False,
@@ -179,7 +179,7 @@ def validation(model="binn.joblib"):
     files = os.listdir("data")
     print(files)
 
-    model_file = os.path.join('pretrained_models', model)
+    model_file = os.path.join('../../pretrained_models', model)
 
     loaded_model = joblib.load(model_file)
 
