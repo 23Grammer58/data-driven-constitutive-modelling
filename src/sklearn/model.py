@@ -22,17 +22,18 @@ def load_data(path="biaxial_three_different_holes.xlsx", validation=False,
 
     if extended_data:
 
-        files = os.listdir("data")[:5]
+        path_to_data = "../../data"
+        files = os.listdir(path_to_data)
         # print(files)
         df_list = []
         for file in files:
-            df_list.append(pd.read_excel(os.path.join('data', file)))
+            df_list.append(pd.read_excel(os.path.join(path_to_data, file)))
 
         df = pd.concat(df_list)
 
     else:
 
-        file =  os.path.join('data',path)
+        file = os.path.join('data',path)
         df = pd.read_excel(file)
 
     # n = df.shape[0]
@@ -283,16 +284,16 @@ if __name__ =="__main__":
     # # print(f2_pred.shape)
     # # print(C_inv_arr.shape)
 
-    # pk2_pred = []
-    # for f, C in zip(f2_pred, C_inv_arr): 
-    #     pk2_pred.append(piola_kirchgoff_2(f1, f, C))
+    pk2_pred = []
+    for f, C in zip(f2_pred, C_inv_arr):
+        pk2_pred.append(piola_kirchgoff_2(f1, f, C))
     
-    # pk2_pred = np.array(pk2_pred)
-    # pk2_anl = np.load("piola_kirchhoff_analytical_val.npy")
-    
+    pk2_pred = np.array(pk2_pred)
+    pk2_anl = np.load("piola_kirchhoff_analytical_val.npy")
 
 
-        
+
+
     # print("MSE not scaled =", mean_squared_error(pk2_anl, pk2_pred))
 
 
