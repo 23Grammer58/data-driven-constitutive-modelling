@@ -3,18 +3,23 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import tqdm
+from dataload import ExcelDataset
+from torchmetrics.regression import MeanSquaredError
+
+import os
 
 # Гиперпараметры
 input_size = 2  # Размерность входных данных
-output_size = 2  # Размерность выходных данных
-learning_rate = 0.001
-epochs = 100
+output_size = 1  # Размерность выходных данных
+hidden_size = 270  # Новое количество нейронов на слое
+learning_rate = 0.1
+epochs = 1
 
 # Создание однослойного перцептрона
 class SingleLayerPerceptron(nn.Module):
     def __init__(self):
         super(SingleLayerPerceptron, self).__init__()
-        self.fc = nn.Linear(input_size, output_size)
+        self.fc = nn.Linear(input_size, hidden_size)
         self.activation = nn.Tanh()
 
     def forward(self, x):
@@ -24,21 +29,29 @@ class SingleLayerPerceptron(nn.Module):
 
 # Нормализация данных
 def normalize_data(data):
-    mean = data.mean(dim=0)
-    std = data.std(dim=0)
+    mean = data.mean()
+    std = data.std()
     return (data - mean) / std
 
 # Генерация фиктивных данных
-# Замени этот блок на загрузку своих данных
-data = torch.randn(100, input_size)
-labels = torch.randn(100, output_size)
+file_path = "../../data"
+excel_files = os.listdir(file_path)
+excel_files = [os.path.join(file_path, file) for file in excel_files]
+data = ExcelDataset(excel_files)
+labels = data.target
 
 # Нормализация входных данных
-normalized_data = normalize_data(data)
+normalized_data = normalize_data(data.features)
 
 # Создание DataLoader
 dataset = TensorDataset(normalized_data, labels)
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+train_size = int(0.9 * len(dataset))
+test_size = len(dataset) - train_size
+train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+
+train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=False)
+test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 # Инициализация модели, функции потерь и оптимизатора
 model = SingleLayerPerceptron()
@@ -47,7 +60,7 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Обучение модели
 for epoch in range(epochs):
-    for inputs, targets in dataloader:
+    for inputs, targets in train_dataloader:
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, targets)
@@ -58,11 +71,20 @@ for epoch in range(epochs):
         print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
 
 # Пример использования обученной модели для инференса
-test_data = torch.randn(10, input_size)  # Замени это на свои тестовые данные
-normalized_test_data = normalize_data(test_data)
-with torch.no_grad():
+# test_data = torch.randn(10, input_size)  # Замени это на свои тестовые данные
+# normalized_test_data = normalize_data(test_dataset)
+mean_squared_error = MeanSquaredError()
+# mean_squared_error(preds, target)
+print(test_dataset)
+print("размер тестовой выборки", len(test_dataset))
+
+for inputs, targets in test_dataloader:
     model.eval()
-    predictions = model(normalized_test_data)
+    predictions = model(inputs)
     model.train()
 
 print("Predictions:", predictions)
+mse = mean_squared_error(predictions, test_dataset.target)
+
+# if __name__ == "__main__":
+
