@@ -15,7 +15,6 @@ hidden_size = 270  # Новое количество нейронов на сл�
 learning_rate = 0.001
 epochs = 100
 
-
 # Создание однослойного перцептрона
 class SingleLayerPerceptron(nn.Module):
     def __init__(self):
