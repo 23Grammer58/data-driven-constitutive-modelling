@@ -80,4 +80,4 @@ if __name__ == "__main__":
     print("размер трейна =", len(train_dataset))
     print("размер теста =", len(test_dataset))
     print("трейн: \n", train_dataset[10:20])
-    print("тест: \n",test_dataset[10:20])
+    print("тест: \n", test_dataset[10:20])
