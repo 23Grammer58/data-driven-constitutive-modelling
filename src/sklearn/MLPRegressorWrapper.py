@@ -39,6 +39,6 @@ class MLPRegressorWrapper:
         self.data_range_ = range
 
     def save_model(self):
-        file = os.path.join('../../pretrained_models', self.model_name + '.joblib')
+        file = os.path.join('pretrained_models', self.model_name + '.joblib')
         joblib.dump(self, file)
     

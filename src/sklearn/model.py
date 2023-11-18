@@ -179,7 +179,7 @@ def validation(model="binn.joblib"):
     files = os.listdir("data")
     print(files)
 
-    model_file = os.path.join('../../pretrained_models', model)
+    model_file = os.path.join('pretrained_models', model)
 
     loaded_model = joblib.load(model_file)
 

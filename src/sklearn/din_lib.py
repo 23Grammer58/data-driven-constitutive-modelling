@@ -9,7 +9,7 @@ import pandas as pd
 #X - I1, I2 y - dpsi/dI1, dpsi/dI2
 def response():
 
-    file = os.path.join('../../pretrained_models', "full_extended_dpsi2.joblib")
+    file = os.path.join('pretrained_models', "full_extended_dpsi2.joblib")
 
     loaded_model = joblib.load(file)
 
