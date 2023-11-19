@@ -215,7 +215,7 @@ def piola_kirchgoff_2(f1, f2, C_inv, miu=6600, H=1):
     return T
 
 
-def metric(T_arr, T_pred_arr):
+def stress_metric(T_arr, T_pred_arr):
     
     mean = []
     max = []
@@ -230,7 +230,7 @@ def metric(T_arr, T_pred_arr):
     return np.array(mean), np.array(max)
     
 def test():
-    error_mean, error_max = metric(pk2_anl, pk2_pred)
+    error_mean, error_max = stress_metric(pk2_anl, pk2_pred)
     
     print(error_mean - error_max)
 
