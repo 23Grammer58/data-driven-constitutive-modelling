@@ -9,8 +9,6 @@ from torchmetrics.regression import MeanSquaredError
 
 import os
 
-from
-
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -73,9 +71,9 @@ def train(train_dataloader, experiment_name="model"):
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
-            print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.5f}')
-        # if (epoch + 1) % 10 == 0:
-        #     print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
+            # print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.5f}')
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
 
     if experiment_name is not None:
         path_to_save_weights = os.path.join("pretrained_models", experiment_name + ".pth")
@@ -104,6 +102,12 @@ def test(model, test_dataloader):
     mse = criterion(all_predictions, all_targets)
     print("Mean Squared Error on Test Data:", mse.item())
 
+def jit(model, x):
+    traced_net = torch.jit.trace(model, x)
+    directory = "pretrained_models/"
+
+    torch.jit.save(traced_net, directory + 'MLP.pt')
+
 
 if __name__ == "__main__":
     print("loading data...")
@@ -111,3 +115,6 @@ if __name__ == "__main__":
     model = train(train_dataloader)
     print("test data...")
     test(model, test_dataloader)
+
+    x = (torch.randn(1, 10), torch.randn(1, 10))
+    jit(model, x)

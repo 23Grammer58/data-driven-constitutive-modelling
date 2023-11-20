@@ -58,7 +58,7 @@ if __name__ == "__main__":
     # f = open(r"full_data_names.txt")
     # for lines in f:
     #     excel_files.append(lines[:-1])
-    dataset = ExcelDataset("one_data_names.txt.txt")
+    dataset = ExcelDataset("one_data_names.txt")
 
     f = dataset.features
     t = dataset.target
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     print("тип фичей -", type(f))
 
     dataset = TensorDataset(f, t)
-    data_loader = DataLoader(dataset, batch_size=64, shuffle=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=False, pin_memory=True)
 
     train_size = int(0.9 * len(dataset))
     test_size = len(dataset) - train_size
