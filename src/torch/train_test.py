@@ -4,8 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
 from dataload import ExcelDataset
-from model import SingleLayerPerceptron
-from torchmetrics.regression import MeanSquaredError
+from src.torch.models.CNN import StrainEnergyCANN
 
 import os
 
@@ -21,7 +20,7 @@ input_size = 2  # Размерность входных данных
 output_size = 1  # Размерность выходных данных
 hidden_size = 270  # Новое количество нейронов на слое
 learning_rate = 0.01
-epochs = 5
+epochs = 100
 
 
 def normalize_data(data):
@@ -30,8 +29,8 @@ def normalize_data(data):
     return (data - mean) / std
 
 
-def load_data():
-    data = ExcelDataset()
+def load_data(path_to_exp_names):
+    data = ExcelDataset(path=path_to_exp_names)
     print("data len =", len(data))
     labels = normalize_data(data.target)
 
@@ -54,9 +53,9 @@ def load_data():
     return train_dataloader, test_dataloader
 
 
-def train(train_dataloader, experiment_name="model"):
+def train(train_dataloader, experiment_name="model_CANN"):
     # Инициализация модели, функции потерь и оптимизатора
-    model = SingleLayerPerceptron()
+    model = StrainEnergyCANN()
     model.to(device)
 
     criterion = nn.MSELoss()
@@ -67,7 +66,9 @@ def train(train_dataloader, experiment_name="model"):
         for inputs, targets in train_dataloader:
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
-            outputs = model(inputs)
+            i1_inputs=inputs[:, :1]
+            i2_inputs = inputs[:, 1:]
+            outputs = model(i1_inputs, i2_inputs)
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
@@ -91,7 +92,9 @@ def test(model, test_dataloader):
     with torch.no_grad():
         for inputs, targets in test_dataloader:
             inputs, targets = inputs.to(device), targets.to(device)
-            predictions = model(inputs)
+            i1_inputs=inputs[:, :1]  # Предположим, что i1 находится в первом столбце
+            i2_inputs = inputs[:, 1:]
+            predictions = model(i1_inputs, i2_inputs)
             all_predictions.append(predictions)
             all_targets.append(targets)
 
@@ -111,7 +114,8 @@ def jit(model, x):
 
 if __name__ == "__main__":
     print("loading data...")
-    train_dataloader, test_dataloader = load_data()
+    train_dataloader, test_dataloader = load_data("full_data_names.txt")
+    # print(train_dataloader.dataset)
     model = train(train_dataloader)
     print("test data...")
     test(model, test_dataloader)
