@@ -12,6 +12,13 @@ import torch.nn as nn
 from math import exp
 
 
+# Гиперпараметры
+input_size = 2  # Размерность входных данных
+output_size = 1  # Размерность выходных данных
+hidden_size = 270  # Новое количество нейронов на слое
+learning_rate = 0.001
+epochs = 100
+
 # class QuadricNeuronR2(nn.Module):
 #     # constructor
 #     def __init__(self):
@@ -86,7 +93,7 @@ class SingleLayerPerceptron(nn.Module):
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc_end = nn.Linear(hidden_size*2, output_size)
 
-        self.quadric = QuadricNeuronR2()
+        # self.quadric = QuadricNeuronR2()
         # if multiactivation:
         #     self.activations = [nn.Tanh(), nn.ReLU(), nn.Sigmoid()]
         # else:
