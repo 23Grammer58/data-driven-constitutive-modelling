@@ -42,6 +42,16 @@ class ExcelDataset(Dataset):
         return pd.concat(data_frames, ignore_index=True)
 
 
+class SimpleDataset(Dataset):
+    def __init__(self, data):
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
 if __name__ == "__main__":
 
     def normalize_data(data):
@@ -50,7 +60,21 @@ if __name__ == "__main__":
         return (data - mean) / std
 
 
-    # file_path = "../../data"
+    data = list(range(100))
+    dataset = SimpleDataset(data)
+    # Задаем размеры для каждой части (train_size, test_size)
+    train_size = int(0.8 * len(dataset))
+    test_size = len(dataset) - train_size
+
+    # Используем random_split для разделения dataset
+    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+
+    # Выводим размеры полученных наборов данных
+    print(f"Размер обучающей выборки: {len(train_dataset)}")
+    print(f"Размер тестовой выборки: {len(test_dataset)}")
+    for idx in range(len(test_dataset)):
+        data_point = test_dataset[idx]
+        print(f"Элемент {idx + 1}: {data_point}")    # file_path = "../../data"
     # excel_files = os.listdir(file_path)
     # excel_files = [os.path.join(file_path, file) for file in excel_files][:2]
 
@@ -58,28 +82,28 @@ if __name__ == "__main__":
     # f = open(r"full_data_names.txt")
     # for lines in f:
     #     excel_files.append(lines[:-1])
-    dataset = ExcelDataset("one_data_names.txt")
-
-    f = dataset.features
-    t = dataset.target
-    print(dataset.features)
-    print("фичи: \n", f)
-
-    f = normalize_data(f)
-    t = normalize_data(t)
-    print("нормализованные фичи: \n", f)
-    print("тип фичей -", type(f))
-
-    dataset = TensorDataset(f, t)
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=False, pin_memory=True)
-
-    train_size = int(0.9 * len(dataset))
-    test_size = len(dataset) - train_size
-    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-
-    print("размер трейна =", len(train_dataset))
-    print("размер теста =", len(test_dataset))
-    print("трейн: \n", train_dataset[10:20])
-    print("тест: \n", test_dataset[10:20])
+    # dataset = ExcelDataset("one_data_names.txt")
+    #
+    # f = dataset.features
+    # t = dataset.target
+    # print(dataset.features)
+    # print("фичи: \n", f)
+    #
+    # f = normalize_data(f)
+    # t = normalize_data(t)
+    # print("нормализованные фичи: \n", f)
+    # print("тип фичей -", type(f))
+    #
+    # dataset = TensorDataset(f, t)
+    # train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=False, pin_memory=True)
+    #
+    # train_size = int(0.9 * len(dataset))
+    # test_size = len(dataset) - train_size
+    # train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+    #
+    # print("размер трейна =", len(train_dataset))
+    # print("размер теста =", len(test_dataset))
+    # print("трейн: \n", train_dataset[10:20])
+    # print("тест: \n", test_dataset[10:20])
 
     # for inputs, targets in test_dataset:
