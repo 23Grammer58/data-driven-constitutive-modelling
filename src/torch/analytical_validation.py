@@ -28,6 +28,7 @@ def metric(T_arr, T_pred_arr):
 
     return np.array(mean), np.array(max)
 
+
 def calculate_C(invariants):
 
     lambda1 = lambda I1, I2: I1 / 2 + ((I1 / 2) ** 2 - I2) ** 0.5
