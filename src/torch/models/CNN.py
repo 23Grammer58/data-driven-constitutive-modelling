@@ -12,7 +12,7 @@ import math
 from math import exp
 
 # Гиперпараметры
-input_size = 2  # Размерность входных данных
+# input_size = 2  # Размерность входных данных
 output_size = 1  # Размерность выходных данных
 hidden_size = 270  # Новое количество нейронов на слое
 learning_rate = 0.001
@@ -34,6 +34,12 @@ def activation_ln(x):
 
 class SingleInvNet4(nn.Module):
     def __init__(self, input_size, idi, L2):
+        """
+        y=xA^T+b (b=0)
+        :param input_size:
+        :param idi:
+        :param L2:
+        """
         super().__init__()
         self.w11 = nn.Linear(input_size, 1, bias=False)
         self.w21 = nn.Linear(input_size, 1, bias=False)
@@ -50,30 +56,52 @@ class SingleInvNet4(nn.Module):
         i_sqr = torch.mul(i_ref, i_ref)
         w31_out = self.w31(i_sqr)
         w41_out = self.activation_Exp(self.w41(i_sqr))
-        out = torch.cat((w11_out, w21_out, w31_out, w41_out), dim=1)
+        # out = torch.cat((w11_out, w21_out, w31_out, w41_out), dim=1)
+        out = torch.cat((w11_out, w21_out, w31_out, w41_out))
         return out
 
+
 class StrainEnergyCANN(nn.Module):
-    def __init__(self):
+    def __init__(self, batch_size):
         super().__init__()
-        self.single_inv_net1 = SingleInvNet4(1, 0, 0.001)
-        self.single_inv_net2 = SingleInvNet4(1, 4, 0.001)
+        self.batch_size = batch_size
+        self.single_inv_net1 = SingleInvNet4(batch_size, 0, 0.001)
+        self.single_inv_net2 = SingleInvNet4(batch_size, 4, 0.001)
         self.wx2 = nn.Linear(8, 1, bias=False)
 
-    def forward(self, i1: torch.Tensor, i2: torch.Tensor) -> torch.Tensor:
-        i1_out = self.single_inv_net1(i1)
-        i2_out = self.single_inv_net2(i2)
+    # def forward(self, i1: torch.Tensor, i2: torch.Tensor) -> torch.Tensor:
+    def forward(self, invariants:torch.Tensor) -> torch.Tensor:
+        if self.batch_size == 1:
+            i1 = invariants[0]
+            i2 = invariants[1]
+        else:
+            i1 = invariants[:, 0]
+            i2 = invariants[:, 1]
+
+        i1_out = self.single_inv_net1(i1.unsqueeze(1).unsqueeze(0))
+        i2_out = self.single_inv_net2(i2.unsqueeze(1).unsqueeze(0))
+        # out = torch.cat((i1_out, i2_out))
         out = torch.cat((i1_out, i2_out), dim=1)
+        out = out.view(-1, 8)  # Изменение формы перед применением линейного слоя
         out = self.wx2(out)
         return out
 
 
 if __name__ == "__main__":
     torch.manual_seed(42)
-    model = StrainEnergyCANN()
-    y = model(torch.tensor([[0.1]]), torch.tensor([[0.1]]))
+    model = StrainEnergyCANN(batch_size=1)
+    # y = model(torch.tensor([[0.1]]), torch.tensor([[0.1]]))
+    y = model(torch.tensor([[0.1], [0.1]]))
+    # x = [torch.tensor([[0.1], [0.1]]), torch.tensor([[0.1], [0.1]])]
+    # y = model(x)
     print(y)
 
     # Получение графа вычислений
     dot = make_dot(y, params=dict(model.named_parameters()))
     dot.render('CNN', format='png')
+
+"""
+TODO:
+1) Try bilinear layer in wx2 
+
+"""
