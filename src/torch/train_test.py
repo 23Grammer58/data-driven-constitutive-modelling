@@ -161,8 +161,6 @@ def test(model, dataloader, plot_err=False):
     mse = criterion(all_predictions, all_targets)
     print("Mean Squared Error on Test Data:", mse.item())
 
-def jit(model, x):
-    traced_net = torch.jit.trace(model, x)
     if plot_err:
         try:
             plt.plot(err.cpu())
@@ -177,9 +175,13 @@ def jit(model, x):
 
 def jit(model, x, experiment_name):
     # traced_net = torch.jit.trace(model, x)
+    traced_net = torch.jit.script(model)
     directory = "pretrained_models/"
 
-    torch.jit.save(traced_net, directory + 'MLP.pt')
+    torch.jit.save(traced_net, directory + experiment_name + '.pt')
+
+
+# def get_potential(model):
 
 
 if __name__ == "__main__":
