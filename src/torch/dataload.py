@@ -1,10 +1,27 @@
 import pandas as pd
+import numpy as np
 from torch.utils.data import DataLoader, random_split, Dataset, TensorDataset
 import torch
+
+gamma = 0.2
+C_inv_shear = np.array([[1 + gamma * gamma, -gamma], [-gamma, 1]])
+
+f1 = 3300
+f2 = lambda invariant: - 2 / invariant ** 2
+
+
+def piola_kirchgoff_2(f1, f2, C_inv, miu=6600, H=1):
+    T = miu * H * (f1 * np.eye(2) + f2 * C_inv)
+    return np.array(T)
+
+
+def NeoHookean_psi(I1, I2):
+    return 6600 * (I1 + 1/I2 - 3)
 
 
 class ExcelDataset(Dataset):
     def __init__(self, path="full_data_names.txt", transform=None):
+        super(Dataset, self).__init__()
 
         self.path = path
 
@@ -13,8 +30,12 @@ class ExcelDataset(Dataset):
 
         self.features = torch.tensor(self.data.drop(columns=['d(psi)/d(I1)', 'd(psi)/d(I2)']).values,
                                      dtype=torch.float32)
-        self.target = torch.tensor(self.data.drop(columns=['d(psi)/d(I1)', 'I1', 'I2']).values,
+        self.dpsi = torch.tensor(self.data.drop(columns=['d(psi)/d(I1)', 'I1', 'I2']).values,
                                    dtype=torch.float32)
+        # self.target = torch.tensor(NeoHookean_psi(self.features['I1'], self.features['I2']))
+        # self.target = self.data[""]
+        self.target = torch.tensor(self.data.apply(
+            lambda row: NeoHookean_psi(row['I1'], row['I2']), axis=1).values, dtype=torch.float32)
         self.transform = transform
 
     def __len__(self):
