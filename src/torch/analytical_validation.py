@@ -44,7 +44,7 @@ def calculate_C(invariants):
     return C_arr
 
 
-if __name__ == "__main__"
+if __name__ == "__main__":
 
     pk2_pred = []
     for f, C in zip(f2_pred, C_inv_arr):
