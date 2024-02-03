@@ -1,0 +1,9 @@
+../../data/biaxial_one_big_hole.xlsx
+../../data/biaxial_two_different_holes.xlsx
+../../data/uniaxial_one_small_hole.xlsx
+../../data/uniaxial_one_big_hole.xlsx
+../../data/uniaxial_two_small_holes.xlsx
+../../data/biaxial_one_small_hole.xlsx
+../../data/uniaxial_two_different_holes.xlsx
+../../data/biaxial_two_small_holes.xlsx
+../../data/uniaxial_three_different_holes.xlsx
