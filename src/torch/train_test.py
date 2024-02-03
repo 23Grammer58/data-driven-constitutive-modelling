@@ -27,7 +27,7 @@ input_size = 2  # Размерность входных данных
 output_size = 1  # Размерность выходных данных
 hidden_size = 270  # Новое количество нейронов на слое
 learning_rate = 0.1
-epochs = 1
+EPOCHS = 2
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
@@ -67,22 +67,21 @@ def load_data(path_to_exp_names, batch_size):
     # return train_dataloader, test_dataloader
 
 
-def train(dataloader, experiment_name, plot_loss=False):
-    batch_size = dataloader.batch_size
+def train(train_loader, test_loader, experiment_name, plot_loss=False):
+
+    batch_size = train_loader.batch_size
     # Инициализация модели, функции потерь и оптимизатора
     model = StrainEnergyCANN(batch_size, device=device).to(device)
-    # model.to(device)
-
-    criterion = nn.MSELoss()
+    loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    # Обучение модели
-    losses = []
-    it = 0
-    running_loss = 0.
+    def train_one_epoch(epoch_index, tb_writer):
 
-    for epoch in range(epochs):
-        for i, data in enumerate(dataloader):
+        losses = []
+        running_loss = 0.
+        last_loss = 0.
+
+        for i, data in enumerate(train_loader):
             inputs, targets = data
             inputs, targets = inputs.to(device), targets.to(device)
 
@@ -94,7 +93,7 @@ def train(dataloader, experiment_name, plot_loss=False):
             # i1_inputs=inputs[:, :1]
             # i2_inputs = inputs[:, 1:]
             outputs = model(inputs)
-            loss = criterion(outputs, targets)
+            loss = loss_fn(outputs, targets)
             loss.backward()
             optimizer.step()
 
@@ -102,19 +101,59 @@ def train(dataloader, experiment_name, plot_loss=False):
             if i % 10000 == 999:
                 last_loss = running_loss / 1000  # loss per batch
                 print('  batch {} loss: {}'.format(i + 1, last_loss))
-                tb_x = 1 * len(dataloader) + i + 1
-                writer.add_scalar('Loss/train', last_loss, tb_x)
+                tb_x = 1 * len(train_loader) + i + 1
+                tb_writer.add_scalar('Loss/train', last_loss, tb_x)
                 running_loss = 0.
 
+        return last_loss
 
-            # print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.5f}')
-            # if train_dataloader == [inputs, targets]:
-            #     losses.append(loss.item())
-            if (epoch + 1) % 10 == 0:
-                print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
-            losses.append(loss.item)
+    epoch_number = 0
+    best_vloss = 1_000_000.
+    losses = []
 
-    print(it)
+    # Обучение модели
+    for epoch in range(EPOCHS):
+        print('EPOCH {}:'.format(epoch_number + 1))
+
+        # Make sure gradient tracking is on, and do a pass over the data
+        model.train(True)
+        avg_loss = train_one_epoch(epoch_number, writer)
+
+        running_vloss = 0.0
+        # Set the model to evaluation mode, disabling dropout and using population
+        # statistics for batch normalization.
+        model.eval()
+
+        # Disable gradient computation and reduce memory consumption.
+        with torch.no_grad():
+            for i, vdata in enumerate(test_loader):
+                vinputs, vlabels = vdata
+                voutputs = model(vinputs)
+                vloss = loss_fn(voutputs, vlabels)
+                running_vloss += vloss
+
+        avg_vloss = running_vloss / (i + 1)
+        print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
+
+        # Log the running loss averaged per batch
+        # for both training and avg
+        writer.add_scalars('Training vs. Validation Loss',
+                           {'Training': avg_loss, 'Test': avg_vloss},
+                           epoch_number + 1)
+        writer.flush()
+
+        # Track best performance, and save the model's state
+        if avg_vloss < best_vloss:
+            best_vloss = avg_vloss
+            model_path = 'model_{}_{}'.format(timestamp, epoch_number)
+            torch.save(model.state_dict(), model_path)
+
+        losses.append(best_vloss.item())
+        epoch_number += 1
+
+        # if (epoch + 1) % 10 == 0:
+        #     print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
+
     if experiment_name is not None:
         path_to_save_weights = os.path.join("pretrained_models", experiment_name + ".pth")
         torch.save(model.state_dict(), path_to_save_weights)
@@ -136,8 +175,6 @@ def test(model, dataloader, plot_err=False):
     all_predictions = []
     all_targets = []
 
-    inputss = []
-    it = 0
     err = []
     with torch.no_grad():
         for inputs, targets in dataloader:
@@ -150,13 +187,13 @@ def test(model, dataloader, plot_err=False):
             # i2_inputs = inputs[:, 1:]
 
             # try:
-            predictions = model(inputs).to(device)
+            predictions = model(inputs)
             # except:
             #     predictions = model(inputs.transpose())
             #     print(model.weights)
             all_predictions.append(predictions)
             all_targets.append(targets)
-            err.append((targets - predictions) ** 2)
+            err.append(((targets - predictions) ** 2).values())
 
     all_predictions = torch.cat(all_predictions, dim=0)
     all_targets = torch.cat(all_targets, dim=0)
@@ -167,7 +204,7 @@ def test(model, dataloader, plot_err=False):
 
     if plot_err:
         try:
-            plt.plot(err.cpu())
+            plt.plot(err)
             plt.xlabel('Epoch')
             plt.ylabel('Loss')
             plt.title('Training Loss')
@@ -177,7 +214,7 @@ def test(model, dataloader, plot_err=False):
              print("can't plot")
 
 
-def jit(model, x, experiment_name):
+def jit(model,  experiment_name, x=None):
     # traced_net = torch.jit.trace(model, x)
     traced_net = torch.jit.script(model)
     directory = "pretrained_models/"
@@ -189,8 +226,10 @@ def jit(model, x, experiment_name):
 
 
 if __name__ == "__main__":
+    torch.manual_seed(42)
 
-    experiment = "CNN2"
+    experiment = "experiment"
+
     print("loading data...")
     # train_dataloader, test_dataloader = load_data("full_data_names.txt", batch_size=1)
     train_dataloader = load_data("one_data_names.txt", batch_size=1)
@@ -224,4 +263,5 @@ if __name__ == "__main__":
 TODO:
 1) поработать с временем загрузки данных
 2) обернуть весь пайплайн в класс 
+3) обучать с нормализацией и без
 """
