@@ -93,6 +93,19 @@ class StrainEnergyCANN(nn.Module):
         out = self.wx2(out)
         return out
 
+    def get_potential(self):
+        """
+
+        :return: [weights of model]
+        """
+        params = []
+        for weights in self.parameters():
+            weight = weights.detach().to('cpu').numpy().copy()
+            params.append(weight)
+            # params.append(param.data())
+
+        return params
+
 
 if __name__ == "__main__":
     torch.manual_seed(42)
