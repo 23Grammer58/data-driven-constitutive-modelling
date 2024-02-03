@@ -21,13 +21,13 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 print(f"Selected device: {device}")
-
+device = "cpu"
 # Гиперпараметры
 input_size = 2  # Размерность входных данных
 output_size = 1  # Размерность выходных данных
 hidden_size = 270  # Новое количество нейронов на слое
-learning_rate = 0.1
-EPOCHS = 2
+learning_rate = 0.001
+EPOCHS = 100
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
@@ -59,7 +59,7 @@ def load_data(path_to_exp_names, batch_size):
     # print(test_dataset)
     # print("размер тестовой выборки", len(test_dataset))
 
-    dataset_loader = DataLoader(dataset_t, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
+    dataset_loader = DataLoader(dataset_t, batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=True)
     # train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
     # test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
 
@@ -138,7 +138,7 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
         # Log the running loss averaged per batch
         # for both training and avg
         writer.add_scalars('Training vs. Validation Loss',
-                           {'Training': avg_loss, 'Test': avg_vloss},
+                           {'Training': avg_loss, 'valid': avg_vloss},
                            epoch_number + 1)
         writer.flush()
 
@@ -148,7 +148,7 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
             model_path = 'model_{}_{}'.format(timestamp, epoch_number)
             torch.save(model.state_dict(), model_path)
 
-        losses.append(best_vloss.item())
+        losses.append(best_vloss)
         epoch_number += 1
 
         # if (epoch + 1) % 10 == 0:
@@ -228,12 +228,13 @@ def jit(model,  experiment_name, x=None):
 if __name__ == "__main__":
     torch.manual_seed(42)
 
-    experiment = "experiment"
+    experiment = "CNN3"
 
     print("loading data...")
     # train_dataloader, test_dataloader = load_data("full_data_names.txt", batch_size=1)
-    train_dataloader = load_data("one_data_names.txt", batch_size=1)
+    train_dataloader = load_data("without_one.txt", batch_size=1)
     test_dataloader = load_data("one_data_names.txt", batch_size=1)
+
 
     trained_model = train(
                         train_dataloader,
