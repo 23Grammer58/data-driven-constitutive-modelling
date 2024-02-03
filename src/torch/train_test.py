@@ -13,9 +13,9 @@ import matplotlib.pyplot as plt
 
 from models.CNN import StrainEnergyCANN
 
-print(torch.cuda.device_count())
-print(torch.cuda.current_device())
-print(torch.cuda.get_device_name(0))
+# print(torch.cuda.device_count())
+# print(torch.cuda.current_device())
+# print(torch.cuda.get_device_name(0))
 if torch.cuda.is_available():
     device = torch.device("cuda")
 else:
@@ -32,6 +32,7 @@ epochs = 1
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 
+
 def normalize_data(data):
     mean = data.mean()
     std = data.std()
@@ -39,28 +40,31 @@ def normalize_data(data):
 
 
 def load_data(path_to_exp_names, batch_size):
-    dataset = ExcelDataset(path=path_to_exp_names, transform=None)
-    print("data len =", len(dataset))
+    dataset = ExcelDataset(path=path_to_exp_names, transform=normalize_data)
+    # print("data len =", len(dataset))
     # Нормализация входных данных
-    dataset.features = normalize_data(dataset.features)
-    dataset.target = normalize_data(dataset.target)
+    # dataset.features = normalize_data(dataset.features)
+    # dataset.target = normalize_data(dataset.target)
     # labels = data.target
     # normalized_data = data.features
 
     # Создание DataLoader
-    # dataset = TensorDataset(normalized_fetures, labels)
+    # dataset_t = TensorDataset(normalized_fetures, labels)
+    dataset_t = TensorDataset(dataset.features, dataset.target)
     # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
-    train_size = int(0.9 * len(dataset))
-    test_size = len(dataset) - train_size
-    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+    # train_size = int(0.9 * len(dataset_t))
+    # test_size = len(dataset_t) - train_size
+    # train_dataset, test_dataset = torch.utils.data.random_split(dataset_t, [train_size, test_size])
 
     # print(test_dataset)
-    print("размер тестовой выборки", len(test_dataset))
+    # print("размер тестовой выборки", len(test_dataset))
 
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
+    dataset_loader = DataLoader(dataset_t, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
+    # train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
+    # test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
 
-    return train_dataloader, test_dataloader
+    return dataset_loader
+    # return train_dataloader, test_dataloader
 
 
 def train(dataloader, experiment_name, plot_loss=False):
@@ -189,15 +193,24 @@ if __name__ == "__main__":
     experiment = "CNN2"
     print("loading data...")
     # train_dataloader, test_dataloader = load_data("full_data_names.txt", batch_size=1)
-    # print(train_dataloader.dataset)
-    # trained_model = train(train_dataloader, plot_loss=True, experiment_name="experimental")
+    train_dataloader = load_data("one_data_names.txt", batch_size=1)
+    test_dataloader = load_data("one_data_names.txt", batch_size=1)
+
+    trained_model = train(
+                        train_dataloader,
+                        test_dataloader,
+                        plot_loss=True,
+                        experiment_name=experiment)
+
     print("test data...")
-    trained_model = StrainEnergyCANN(batch_size=1, device=device)
-    trained_model.load_state_dict(torch.load('pretrained_models/experimental.pth'))
+    # trained_model = StrainEnergyCANN(batch_size=1, device=device)
+    # trained_model.load_state_dict(torch.load('pretrained_models/experimental.pth'))
     # test(trained_model, test_dataloader, plot_err=True)
-    # print(trained_model.parameters())
-    for param in trained_model.parameters():
-        print(param, type(param), param.size())
+
+    weights = trained_model.get_potential()
+    print(weights)
+    # for param in trained_model.parameters():
+    #     print(param, type(param), param.size())
 
     
 
@@ -205,7 +218,7 @@ if __name__ == "__main__":
     # x1 = torch.randn(1).to(device)
     # x2 = torch.randn(1).to(device)
     # # print(x1)
-    # jit(trained_model, (x1, x2), experiment_name=experiment)
+    jit(trained_model,  experiment_name=experiment)
 
 """
 TODO:
