@@ -10,6 +10,7 @@ from torchviz import make_dot
 import os
 import math
 from math import exp
+import numpy as np
 
 # Гиперпараметры
 # input_size = 2  # Размерность входных данных
@@ -33,7 +34,7 @@ def activation_ln(x):
 
 
 class SingleInvNet4(nn.Module):
-    def __init__(self, input_size, idi, L2):
+    def __init__(self, input_size, idi, device):
         """
         y=xA^T+b (b=0)
         :param input_size:
@@ -41,12 +42,12 @@ class SingleInvNet4(nn.Module):
         :param L2:
         """
         super().__init__()
-        self.w11 = nn.Linear(input_size, 1, bias=False)
-        self.w21 = nn.Linear(input_size, 1, bias=False)
-        self.w31 = nn.Linear(input_size, 1, bias=False)
-        self.w41 = nn.Linear(input_size, 1, bias=False)
+        self.w11 = nn.Linear(input_size, 1, bias=False).to(device)
+        self.w21 = nn.Linear(input_size, 1, bias=False).to(device)
+        self.w31 = nn.Linear(input_size, 1, bias=False).to(device)
+        self.w41 = nn.Linear(input_size, 1, bias=False).to(device)
         self.activation_Exp = activation_Exp
-        self.L2 = L2
+        # self.L2 = L2
         self.idi = idi
 
     def forward(self, i: torch.Tensor) -> torch.Tensor:
@@ -62,27 +63,33 @@ class SingleInvNet4(nn.Module):
 
 
 class StrainEnergyCANN(nn.Module):
-    def __init__(self, batch_size):
+    def __init__(self, batch_size, device):
         super().__init__()
+        self.potential_constants = np.zeros(16)
+        self.device = device
         self.batch_size = batch_size
-        self.single_inv_net1 = SingleInvNet4(batch_size, 0, 0.001)
-        self.single_inv_net2 = SingleInvNet4(batch_size, 4, 0.001)
+        self.single_inv_net1 = SingleInvNet4(batch_size, 0, device)
+        self.single_inv_net2 = SingleInvNet4(batch_size, 4, device)
         self.wx2 = nn.Linear(8, 1, bias=False)
 
     # def forward(self, i1: torch.Tensor, i2: torch.Tensor) -> torch.Tensor:
     def forward(self, invariants:torch.Tensor) -> torch.Tensor:
         if self.batch_size == 1:
+            invariants = invariants[0].clone().detach().to(self.device)
             i1 = invariants[0]
             i2 = invariants[1]
+
+            i1_out = self.single_inv_net1(i1.unsqueeze(0))
+            i2_out = self.single_inv_net2(i2.unsqueeze(0))
         else:
             i1 = invariants[:, 0]
             i2 = invariants[:, 1]
 
-        i1_out = self.single_inv_net1(i1.unsqueeze(1).unsqueeze(0))
-        i2_out = self.single_inv_net2(i2.unsqueeze(1).unsqueeze(0))
-        # out = torch.cat((i1_out, i2_out))
-        out = torch.cat((i1_out, i2_out), dim=1)
-        out = out.view(-1, 8)  # Изменение формы перед применением линейного слоя
+            i1_out = self.single_inv_net1(i1.unsqueeze(1).unsqueeze(0))
+            i2_out = self.single_inv_net2(i2.unsqueeze(1).unsqueeze(0))
+        out = torch.cat((i1_out, i2_out))
+        # out = torch.cat((i1_out, i2_out), dim=1)
+        # out = out.view(-1, 8)  # Изменение формы перед применением линейного слоя
         out = self.wx2(out)
         return out
 
