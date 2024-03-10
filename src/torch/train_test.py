@@ -75,9 +75,17 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
     # Инициализация модели, функции потерь и оптимизатора
     model = StrainEnergyCANN(batch_size, device=device).to(device)
 
+    path_to_save_weights = os.path.join("pretrained_models", experiment_name)
+    if experiment_name is not None:
+        if not os.path.exists(path_to_save_weights):
+            os.makedirs(path_to_save_weights)
+            print(f"Директория {path_to_save_weights} успешно создана")
+        else:
+            print(f"Директория {path_to_save_weights} уже существует")
+
 
     loss_fn = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     def train_one_epoch(epoch_index, tb_writer, l2_reg_coeff=0.001):
 
@@ -100,20 +108,20 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
 
             loss = loss_fn(outputs, targets)
 
-            # coefs = model.get_potential()
+            coefs = model.get_potential()
 
-            # l2_reg = None
-            # for param in coefs:
-            #     # print(param)
-            #     if l2_reg is None:
-            #         l2_reg = param ** 2
-            #     else:
-            #         l2_reg = l2_reg + param ** 2
-            #     # print("l2 reg = ", l2_reg)
-            #
-            # # Добавляем L2 регуляризацию к функции потерь
-            # if l2_reg is not None:
-            #     loss = loss + l2_reg_coeff * l2_reg
+            l2_reg = None
+            for param in coefs:
+                # print(param)
+                if l2_reg is None:
+                    l2_reg = param ** 2
+                else:
+                    l2_reg = l2_reg + param ** 2
+                # print("l2 reg = ", l2_reg)
+
+            # Добавляем L2 регуляризацию к функции потерь
+            if l2_reg is not None:
+                loss = loss + l2_reg_coeff * l2_reg
 
             loss.backward()
             optimizer.step()
@@ -186,8 +194,6 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
         # if (epoch + 1) % 10 == 0:
         #     print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
 
-    # if experiment_name is not None:
-
     if plot_loss:
         plt.plot(losses)
         plt.xlabel('Epoch')
@@ -255,12 +261,18 @@ def jit(model, experiment_name, x=None):
 if __name__ == "__main__":
     torch.manual_seed(42)
 
-    experiment = "CNN_l2"
+    experiment = "CNN_2term_l2"
 
     print("loading data...")
-    # train_dataloader, test_dataloader = load_data("full_data_names.txt", batch_size=1)
-    train_dataloader = load_data("one_data_names.txt", batch_size=1)
-    test_dataloader = load_data("another_one_data_name.txt", batch_size=1)
+
+    # train_dataloader, test_dataloader = load_data(
+    #     "full_data_names.txt",
+    #     batch_size=1)
+
+    train_dataloader = load_data(
+        "one_data_names.txt", batch_size=1)
+    test_dataloader = load_data(
+        "another_one_data_name.txt", batch_size=1)
 
     trained_model = train(
         train_dataloader,
@@ -268,11 +280,11 @@ if __name__ == "__main__":
         plot_loss=True,
         experiment_name=experiment)
 
-    print("test data...")
+    # print("test data...")
     # trained_model = StrainEnergyCANN(batch_size=1, device=device)
-    # trained_model.load_state_dict(torch.load('pretrained_models\CNN3_20240204_222321_13.pth'))
-    test(trained_model, test_dataloader, plot_err=True)
-
+    # trained_model.load_state_dict(torch.load('20240310_131515_9.pth'))
+    # test(trained_model, test_dataloader, plot_err=True)
+    print(trained_model.get_potential())
 
 
     # x1 = torch.randn(1).to(device)
