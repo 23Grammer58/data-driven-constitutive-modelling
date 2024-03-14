@@ -7,11 +7,13 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 
-from dataload import ExcelDataset
-from src.torch.models.CNN import StrainEnergyCANN
+from utils.dataload import ExcelDataset
 
 import os
 import matplotlib.pyplot as plt
+import numpy as np
+import sympy as sp
+
 
 from models.CNN import StrainEnergyCANN
 
@@ -24,7 +26,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 print(f"Selected device: {device}")
-device = "cpu"
+# device = "cpu"
 
 # Гиперпараметры
 input_size = 2  # Размерность входных данных
@@ -43,7 +45,7 @@ def normalize_data(data):
 
 
 def load_data(path_to_exp_names, batch_size):
-    dataset = ExcelDataset(path=path_to_exp_names, transform=normalize_data)
+    dataset = ExcelDataset(path=path_to_exp_names, transform=None)
     # print("data len =", len(dataset))
     # Нормализация входных данных
     # dataset.features = normalize_data(dataset.features)
@@ -71,8 +73,11 @@ def load_data(path_to_exp_names, batch_size):
 
 
 def train(train_loader, test_loader, experiment_name, plot_loss=False):
+
     batch_size = train_loader.batch_size
-    # Инициализация модели, функции потерь и оптимизатора
+
+    # Инициализация модели, функции потерь и оптимизатор
+    # а
     model = StrainEnergyCANN(batch_size, device=device).to(device)
 
     path_to_save_weights = os.path.join("pretrained_models", experiment_name)
@@ -82,7 +87,6 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
             print(f"Директория {path_to_save_weights} успешно создана")
         else:
             print(f"Директория {path_to_save_weights} уже существует")
-
 
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -110,18 +114,18 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
 
             coefs = model.get_potential()
 
-            l2_reg = None
-            for param in coefs:
-                # print(param)
-                if l2_reg is None:
-                    l2_reg = param ** 2
-                else:
-                    l2_reg = l2_reg + param ** 2
-                # print("l2 reg = ", l2_reg)
+            # l2_reg = None
+            # for param in coefs:
+            #     # print(param)
+            #     if l2_reg is None:
+            #         l2_reg = param ** 2
+            #     else:
+            #         l2_reg = l2_reg + param ** 2
+            #     # print("l2 reg = ", l2_reg)
 
-            # Добавляем L2 регуляризацию к функции потерь
-            if l2_reg is not None:
-                loss = loss + l2_reg_coeff * l2_reg
+            # # Добавляем L2 регуляризацию к функции потерь
+            # if l2_reg is not None:
+            #     loss = loss + l2_reg_coeff * l2_reg
 
             loss.backward()
             optimizer.step()
@@ -191,8 +195,6 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
 
         elosses.append(avg_vloss)
         epoch_number += 1
-        plt.plot(math.log(avg_vloss))
-        plt.show()
         # if (epoch + 1) % 10 == 0:
         #     print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
 
@@ -266,7 +268,7 @@ def jit(model, experiment_name, x=None):
 if __name__ == "__main__":
     torch.manual_seed(42)
 
-    experiment = "CNN_2term_l2"
+    experiment = "CNN_MR_2term"
 
     print("loading data...")
 
@@ -274,28 +276,56 @@ if __name__ == "__main__":
     #     "full_data_names.txt",
     #     batch_size=1)
 
-    train_dataloader = load_data(
-        "one_data_names.txt", batch_size=1)
-    test_dataloader = load_data(
-        "another_one_data_name.txt", batch_size=1)
+    # train_dataloader = load_data(
+    #     "one_data_names.txt", batch_size=1)
+    # test_dataloader = load_data(
+    #     "another_one_data_name.txt", batch_size=1)
+    #
+    # trained_model = train(
+    #     train_dataloader,
+    #     test_dataloader,
+    #     plot_loss=True,
+    #     experiment_name=experiment)
 
-    trained_model = train(
-        train_dataloader,
-        test_dataloader,
-        plot_loss=True,
-        experiment_name=experiment)
+    print("test data...")
+    trained_model = StrainEnergyCANN(batch_size=1, device=device)
+    # for epoch_number in range(10):
+    #     trained_model.load_state_dict(torch.load('pretrained_models/CNN_MR_full_2term_l2/20240313_131752_' + str(epoch_number) + ".pth"))
+    #     # test(trained_model, test_dataloader, plot_err=True)
+    #     print(f"Epoch {epoch_number}: {trained_model.get_potential()}")
+    # print(trained_model)
 
-    # print("test data...")
-    # trained_model = StrainEnergyCANN(batch_size=1, device=device)
-    # trained_model.load_state_dict(torch.load('20240310_131515_9.pth'))
-    # test(trained_model, test_dataloader, plot_err=True)
-    print(trained_model.get_potential())
+    trained_model.load_state_dict(
+        torch.load('pretrained_models/CNN_MR_full_2term_l2/20240313_131752_7.pth'))
 
+    raw_params = trained_model.get_potential()
 
+    # Разделение параметров и вычисление коэффициентов
+    mid = len(raw_params) // 2
+    first_half = raw_params[:mid]
+    second_half = raw_params[mid:]
+    coefficients = [first_half[i] * second_half[i] for i in range(mid)]
+
+    # Инициализация символов SymPy
+    I1, I2 = sp.symbols('I1 I2')
+
+    # Проверка на количество коэффициентов
+    if len(coefficients) < 4:
+        raise ValueError("Для формулы требуется как минимум 4 коэффициента")
+
+    # Подставляем коэффициенты в формулу
+    psi = (coefficients[0] * (I1 - 3) + coefficients[2] * (I2 - 3) +
+           coefficients[1] * (I1 - 3) ** 2 + coefficients[3] * (I2 - 3) ** 2)
+
+    # Вывод формулы
+    sp.pprint(psi)
+
+    psi_evaluated = psi.subs({I1: 4, I2: 4}).evalf()
+    print(psi_evaluated)
     # x1 = torch.randn(1).to(device)
     # x2 = torch.randn(1).to(device)
     # # print(x1)
-    jit(trained_model, experiment_name=experiment)
+    # jit(trained_model, experiment_name=experiment)
 
 """
 TODO:
