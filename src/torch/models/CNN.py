@@ -34,6 +34,32 @@ def activation_Exp(x):
 def activation_ln(x):
     return -1.0*math.log(1.0 - (x))
 
+class SingleInvNet1(nn.Module):
+    def __init__(self, input_size, idi, device, l2=0.001):
+        """
+        y=xA^T+b (b=0)
+        :param input_size: input data size
+        :param idi: index of neuron
+        :param l2: L2 regularization coefficient
+        """
+        super().__init__()
+
+        self.l2 = l2
+        self.idi = idi
+
+        self.w11 = nn.Linear(input_size, 1, bias=False).to(device)
+
+    def forward(self, i: torch.Tensor) -> torch.Tensor:
+        i_ref = i - 3.0
+
+        w11_out = self.w11(i_ref)
+
+        out = torch.cat(w11_out)
+        return out
+
+
+
+
 
 class SingleInvNet2(nn.Module):
     def __init__(self, input_size, idi, device, l2=0.001):
@@ -48,19 +74,17 @@ class SingleInvNet2(nn.Module):
         self.l2 = l2
         self.idi = idi
 
-        self.w11 = nn.Linear(input_size, 1, bias=False).to(device)
-        self.w21 = nn.Linear(input_size, 1, bias=False).to(device)
-
-        self.activation_Exp = activation_Exp
+        self.w11_linear = nn.Linear(input_size, 1, bias=False).to(device)
+        self.w21_square = nn.Linear(input_size, 1, bias=False).to(device)
 
     def forward(self, i: torch.Tensor) -> torch.Tensor:
         i_ref = i - 3.0
 
-        w11_out = self.w11(i_ref)
+        w11_out = self.w11_linear(i_ref)
 
         i_sqr = torch.mul(i_ref, i_ref)
 
-        w21_out = self.w21(i_sqr)
+        w21_out = self.w21_square(i_sqr)
 
         out = torch.cat((w11_out, w21_out))
         return out
@@ -157,7 +181,7 @@ class StrainEnergyCANN(nn.Module):
         params = []
         for id, weights in enumerate(self.parameters()):
             # print(f"id = {id}, weight = {weights}")
-            if id == 8:
+            if id == 4:
                 weights = weights.tolist()
                 for weight_last_layer in weights[0]:
                     # print(weight_last_layer)
