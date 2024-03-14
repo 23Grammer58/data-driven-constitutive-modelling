@@ -143,7 +143,8 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
 
     epoch_number = 0
     best_vloss = torch.inf
-    losses = []
+    elosses = []
+    vlosses = []
 
     # Обучение модели
     for epoch in range(EPOCHS):
@@ -165,6 +166,7 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
                 voutputs = model(vinputs).to(device)
                 vloss = loss_fn(voutputs, vlabels)
                 running_vloss += vloss
+                vlosses.append(vloss)
 
         avg_vloss = running_vloss / (i + 1)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
@@ -185,17 +187,20 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
         path_to_save_weights = os.path.join("pretrained_models", experiment_name)
         path_to_save_weights = os.path.join(path_to_save_weights, model_path + ".pth")
         torch.save(model.state_dict(), path_to_save_weights)
-        print(f"Saved PyTorch Model State to {experiment_name}.pth")
+        print(f"Saved PyTorch Model State to {path_to_save_weights}")
 
-        losses.append(avg_vloss)
+        elosses.append(avg_vloss)
         epoch_number += 1
         plt.plot(math.log(avg_vloss))
         plt.show()
         # if (epoch + 1) % 10 == 0:
         #     print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
 
+    plt.plot(vlosses)
+    plt.show()
     if plot_loss:
-        plt.plot(losses)
+
+        plt.plot(elosses)
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.title('Training Loss')
