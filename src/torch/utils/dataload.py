@@ -15,8 +15,12 @@ def piola_kirchgoff_2(f1, f2, C_inv, miu=6600, H=1):
     return np.array(T)
 
 
+def Mooney_Rivlin_psi(I1, I2):
+    return 10 * (I1 - 3) + 5 * (I2 - 3)
+
+
 def NeoHookean_psi(I1, I2):
-    return 6600 * (I1 + 1/I2 - 3)
+    return 10 * (I1 - 3)
 
 
 def normalize_data(data):
@@ -26,8 +30,9 @@ def normalize_data(data):
 
 
 class ExcelDataset(Dataset):
-    def __init__(self, path="full_data_names.txt", transform=None):
-        super(Dataset, self).__init__()
+    def __init__(self, path="full_data_names.txt", transform=None, psi=Mooney_Rivlin_psi):
+        # super(Dataset, self).__init__()
+        super().__init__()
 
         self.path = path
 
@@ -41,7 +46,10 @@ class ExcelDataset(Dataset):
         # self.target = torch.tensor(NeoHookean_psi(self.features['I1'], self.features['I2']))
         # self.target = self.data[""]
         self.target = torch.tensor(self.data.apply(
-            lambda row: NeoHookean_psi(row['I1'], row['I2']), axis=1).values, dtype=torch.float32).unsqueeze(-1)
+            lambda row: psi(row['I1'], row['I2']), axis=1).values, dtype=torch.float32).unsqueeze(-1)
+
+        # self.target = torch.tensor(self.data.apply(
+        #     lambda row: с(row['I1'], row['I2']), axis=1).values, dtype=torch.float32).unsqueeze(-1)
 
         if transform is not None:
             self.features = normalize_data(self.features)
@@ -113,8 +121,8 @@ if __name__ == "__main__":
     # f = open(r"full_data_names.txt")
     # for lines in f:
     #     excel_files.append(lines[:-1])
-    dataset = ExcelDataset("one_data_names.txt")
-    #
+    dataset = ExcelDataset("../one_data_names.txt")
+
     f = dataset.features
     t = dataset.target
     print(dataset.features)
