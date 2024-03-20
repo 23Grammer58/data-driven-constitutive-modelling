@@ -10,6 +10,21 @@ f1 = 3300
 f2 = lambda invariant: - 2 / invariant ** 2
 
 
+def di_df():
+    di1_df = 2 * f
+    di2_df = 2 * (I1*f - f*f.transpose*f)
+    di3_df = None
+    return np.array([di1_df, di2_df, di3_df])
+
+
+def di_dc():
+    I = np.eye(3)
+    di1_dc = I
+    di2_dc = I1 * I - C
+    di3_dc = I3 * C.transpose().inverse()
+    return np.array([di1_dc, di2_dc, di3_dc])
+
+
 def piola_kirchgoff_2(f1, f2, C_inv, miu=6600, H=1):
     T = miu * H * (f1 * np.eye(2) + f2 * C_inv)
     return np.array(T)
