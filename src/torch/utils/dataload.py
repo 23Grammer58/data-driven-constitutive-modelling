@@ -45,6 +45,26 @@ def normalize_data(data):
 
 
 class ExcelDataset(Dataset):
+    """
+    A custom PyTorch Dataset for loading data from Excel files.
+
+    Args:
+        path (str): The path to the file containing the names of the Excel files to load.
+        transform (callable, optional): Optional transform to be applied on a sample.
+        psi (callable): The function used to calculate the target values from the features.
+
+    Attributes:
+        dataset (pandas.DataFrame): The concatenated dataframe containing the data from all Excel files.
+        features (torch.Tensor): The features extracted from the dataset.
+        dpsi (torch.Tensor): The derivatives of the target with respect to the features.
+        target (torch.Tensor): The target values calculated from the features using the provided function `psi`.
+        transform (callable): The transform to be applied to the features and target.
+
+    Methods:
+        __len__(): Returns the length of the dataset.
+        __getitem__(idx): Returns the features and target for the item at index `idx`.
+        read_from_file(): Reads the Excel files specified in the `path` file and returns the concatenated dataframe.
+    """
     def __init__(self, path="full_data_names.txt", transform=None, psi=Mooney_Rivlin_psi):
         # super(Dataset, self).__init__()
         super().__init__()
@@ -66,9 +86,10 @@ class ExcelDataset(Dataset):
         # self.target = torch.tensor(self.data.apply(
         #     lambda row: с(row['I1'], row['I2']), axis=1).values, dtype=torch.float32).unsqueeze(-1)
 
+        # Normalize the features and target
         if transform is not None:
-            self.features = normalize_data(self.features)
-            self.target = normalize_data(self.target)
+            self.features = transform(self.features)
+            self.target = transform(self.target)
         self.transform = transform
 
     def __len__(self):
@@ -85,6 +106,8 @@ class ExcelDataset(Dataset):
 
     # def __str__(self, ):
     def read_from_file(self):
+        # Read the Excel files and concatenate them into a single dataframe
+
         excel_files = []
 
         with open(self.path, "r") as file:
