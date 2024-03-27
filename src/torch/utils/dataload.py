@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import DataLoader, random_split, Dataset, TensorDataset
 import torch
+from math import exp
+
 
 gamma = 0.2
 C_inv_shear = np.array([[1 + gamma * gamma, -gamma], [-gamma, 1]])
@@ -23,6 +25,12 @@ def di_dc():
     di2_dc = I1 * I - C
     di3_dc = I3 * C.transpose().inverse()
     return np.array([di1_dc, di2_dc, di3_dc])
+
+
+def May_Yin_psi(I1, I2):
+    c0 = 5.95e6  # [kPa]
+    c1 = 1.48e-3
+    return c0 * (exp(c1 * (I1 - 3) ** 2.) - 1)
 
 
 def piola_kirchgoff_2(f1, f2, C_inv, miu=6600, H=1):
@@ -65,7 +73,7 @@ class ExcelDataset(Dataset):
         __getitem__(idx): Returns the features and target for the item at index `idx`.
         read_from_file(): Reads the Excel files specified in the `path` file and returns the concatenated dataframe.
     """
-    def __init__(self, path="full_data_names.txt", transform=None, psi=Mooney_Rivlin_psi):
+    def __init__(self, path="full_data_names.txt", transform=None, psi=May_Yin_psi):
         # super(Dataset, self).__init__()
         super().__init__()
 
@@ -159,23 +167,26 @@ if __name__ == "__main__":
     # f = open(r"full_data_names.txt")
     # for lines in f:
     #     excel_files.append(lines[:-1])
-    dataset = ExcelDataset("../one_data_names.txt")
+    # dataset = ExcelDataset("../one_data_names.txt")
+    #
+    # f = dataset.features
+    # t = dataset.target
+    # print(dataset.features)
+    # print("фичи: \n", f)
+    #
+    # # f = normalize_data(f)
+    # # t = normalize_data(t)
+    # print("нормализованные фичи: \n", f)
+    # print("тип фичей -", type(f))
+    # print("тип target -", type(t))
+    #
+    # # t = torch.stack(list(map(lambda x: torch.unsqueeze(x, 0), t)))
+    # print(t)
+    #
+    # dataset = TensorDataset(f, t)
 
-    f = dataset.features
-    t = dataset.target
-    print(dataset.features)
-    print("фичи: \n", f)
+    print(May_Yin_psi(10.5, 0))
 
-    # f = normalize_data(f)
-    # t = normalize_data(t)
-    print("нормализованные фичи: \n", f)
-    print("тип фичей -", type(f))
-    print("тип target -", type(t))
-
-    # t = torch.stack(list(map(lambda x: torch.unsqueeze(x, 0), t)))
-    print(t)
-
-    dataset = TensorDataset(f, t)
 
 
     # train_size = int(0.9 * len(dataset))

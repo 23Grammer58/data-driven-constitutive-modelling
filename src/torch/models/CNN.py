@@ -34,6 +34,7 @@ def activation_Exp(x):
 def activation_ln(x):
     return -1.0*math.log(1.0 - (x))
 
+
 class SingleInvNet1(nn.Module):
     def __init__(self, input_size, idi, device, l2=0.001):
         """
@@ -56,9 +57,6 @@ class SingleInvNet1(nn.Module):
 
         out = torch.cat(w11_out)
         return out
-
-
-
 
 
 class SingleInvNet2(nn.Module):
@@ -90,8 +88,6 @@ class SingleInvNet2(nn.Module):
         return out
 
 
-
-
 class SingleInvNet4(nn.Module):
     def __init__(self, input_size, idi, device, l2=0.001):
         """
@@ -101,10 +97,6 @@ class SingleInvNet4(nn.Module):
         :param l2: L2 regularization coefficient
         """
         super().__init__()
-        # self.dropout1 = nn.Dropout(0.1)
-        # self.dropout2 = nn.Dropout(0.5)
-        # self.dropout3 = nn.Dropout(0.1)
-        # self.dropout4 = nn.Dropout(0.5)
 
         self.l2 = l2
         self.idi = idi
@@ -115,11 +107,6 @@ class SingleInvNet4(nn.Module):
         self.w41 = nn.Linear(input_size, 1, bias=False).to(device)
 
         self.activation_Exp = activation_Exp
-
-        # self.w11.weight_regularizer = nn.Parameter(torch.Tensor(1), requires_grad=False)
-        # self.w21.weight_regularizer = nn.Parameter(torch.Tensor(1), requires_grad=False)
-        # self.w31.weight_regularizer = nn.Parameter(torch.Tensor(1), requires_grad=False)
-        # self.w41.weight_regularizer = nn.Parameter(torch.Tensor(1), requires_grad=False)
 
     def forward(self, i: torch.Tensor) -> torch.Tensor:
         i_ref = i - 3.0
@@ -148,12 +135,12 @@ class StrainEnergyCANN(nn.Module):
         self.potential_constants = np.zeros(16)
         self.device = device
         self.batch_size = batch_size
-        self.single_inv_net1 = SingleInvNet2(batch_size, 0, device)
-        self.single_inv_net2 = SingleInvNet2(batch_size, 4, device)
-        self.wx2 = nn.Linear(4, 1, bias=False)
+        self.single_inv_net1 = SingleInvNet4(batch_size, 0, device)
+        self.single_inv_net2 = SingleInvNet4(batch_size, 4, device)
+        self.wx2 = nn.Linear(8, 1, bias=False)
 
     # def forward(self, i1: torch.Tensor, i2: torch.Tensor) -> torch.Tensor:
-    def forward(self, invariants:torch.Tensor) -> torch.Tensor:
+    def forward(self, invariants: torch.Tensor) -> torch.Tensor:
         if self.batch_size == 1:
             invariants = invariants[0].clone().detach().to(self.device)
             i1 = invariants[0]
@@ -181,7 +168,7 @@ class StrainEnergyCANN(nn.Module):
         params = []
         for id, weights in enumerate(self.parameters()):
             # print(f"id = {id}, weight = {weights}")
-            if id == 4:
+            if id == 8:
                 weights = weights.tolist()
                 for weight_last_layer in weights[0]:
                     # print(weight_last_layer)

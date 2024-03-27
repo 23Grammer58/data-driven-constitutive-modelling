@@ -1,4 +1,4 @@
-import math
+from math import exp
 
 import torch
 import torch.nn as nn
@@ -46,7 +46,7 @@ def normalize_data(data):
 
 
 def load_data(path_to_exp_names, batch_size):
-    dataset = ExcelDataset(path=path_to_exp_names, transform=None)
+    dataset = ExcelDataset(path=path_to_exp_names, transform=normalize_data)
     # print("data len =", len(dataset))
     # Нормализация входных данных
     # dataset.features = normalize_data(dataset.features)
@@ -74,7 +74,18 @@ def load_data(path_to_exp_names, batch_size):
 
 
 def train(train_loader, test_loader, experiment_name, plot_loss=False):
+    """
+    Train the model on the given dataset.
 
+    Args:
+        train_loader (DataLoader): DataLoader for the training dataset.
+        test_loader (DataLoader): DataLoader for the validation dataset.
+        experiment_name (str): Name of the experiment.
+        plot_loss (bool, optional): Whether to plot the training and validation loss. Defaults to False.
+
+    Returns:
+        model (nn.Module): The trained model.
+    """
     batch_size = train_loader.batch_size
 
     # Инициализация модели, функции потерь и оптимизатор
@@ -116,18 +127,18 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
 
             coefs = model.get_potential()
 
-            # l2_reg = None
-            # for param in coefs:
-            #     # print(param)
-            #     if l2_reg is None:
-            #         l2_reg = param ** 2
-            #     else:
-            #         l2_reg = l2_reg + param ** 2
-            #     # print("l2 reg = ", l2_reg)
+            l2_reg = None
+            for param in coefs:
+                # print(param)
+                if l2_reg is None:
+                    l2_reg = param ** 2
+                else:
+                    l2_reg = l2_reg + param ** 2
+                # print("l2 reg = ", l2_reg)
 
-            # # Добавляем L2 регуляризацию к функции потерь
-            # if l2_reg is not None:
-            #     loss = loss + l2_reg_coeff * l2_reg
+            # Добавляем L2 регуляризацию к функции потерь
+            if l2_reg is not None:
+                loss = loss + l2_reg_coeff * l2_reg
 
             loss.backward()
             optimizer.step()
@@ -264,7 +275,7 @@ def jit(model, experiment_name, x=None):
     torch.jit.save(traced_net, directory + experiment_name + '.pt')
 
 
-def get_potential_formula(model):
+def get_potential_formula_2term(model):
 
     raw_params = model.get_potential()
     mid = len(raw_params) // 2
@@ -276,8 +287,8 @@ def get_potential_formula(model):
     I1, I2 = sp.symbols('I1 I2')
 
     # Проверка на количество коэффициентов
-    if len(coefficients) < 4:
-        raise ValueError("Для формулы требуется как минимум 4 коэффициента")
+    # if len(coefficients) < 4:
+    #     raise ValueError("Для формулы требуется как минимум 4 коэффициента")
 
     # Подставляем коэффициенты в формулу
     psi = (coefficients[0] * (I1 - 3) + coefficients[2] * (I2 - 3) +
@@ -287,27 +298,58 @@ def get_potential_formula(model):
     sp.pprint(psi)
 
 
+def get_potential_formula(model):
+
+    raw_params = model.get_potential()
+    # print(raw_params)
+    mid = len(raw_params) // 2
+    first_half = raw_params[:mid]
+    second_half = raw_params[mid:]
+    coefficients = [first_half[i] * second_half[i] for i in range(mid)]
+
+    # Инициализация символов SymPy
+    I1, I2 = sp.symbols('I1 I2')
+
+    # Проверка на количество коэффициентов
+    # if len(coefficients) < 4:
+    #     raise ValueError("Для формулы требуется как минимум 4 коэффициента")
+
+    # Подставляем коэффициенты в формулу
+    psi = (coefficients[0] * (I1 - 3)
+           + coefficients[2] * (I2 - 3)
+           + coefficients[1] * (I1 - 3) ** 2
+           + coefficients[3] * (I2 - 3) ** 2
+           + coefficients[4] * sp.exp(I1 - 3)
+           + coefficients[6] * sp.exp(I2 - 3)
+           + coefficients[5] * sp.exp(I1 - 3) ** 2
+           + coefficients[7] * sp.exp(I2 - 3) ** 2)
+
+    # Вывод формулы
+    sp.pprint(psi)
+
+
 if __name__ == "__main__":
     torch.manual_seed(42)
 
-    experiment = "CNN_MR_2term_2/"
+    experiment = "CNN_MY_4term/"
 
-    print("loading data...")
-
-    # train_dataloader, test_dataloader = load_data(
-    #     "full_data_names.txt",
-    #     batch_size=1)
-
+    # print("loading data...")
+    #
+    # # train_dataloader, test_dataloader = load_data(
+    # #     "full_data_names.txt",
+    # #     batch_size=1)
+    #
     # train_dataloader = load_data(
     #     "one_data_names.txt", batch_size=1)
     # test_dataloader = load_data(
     #     "another_one_data_name.txt", batch_size=1)
-
+    #
     # trained_model = train(
     #     train_dataloader,
     #     test_dataloader,
     #     plot_loss=True,
     #     experiment_name=experiment)
+
 
     print("test data...")
     trained_model = StrainEnergyCANN(batch_size=1, device=device)
