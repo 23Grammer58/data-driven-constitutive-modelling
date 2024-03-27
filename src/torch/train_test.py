@@ -26,16 +26,17 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 print(f"Selected device: {device}")
-# device = "cpu"
+device = "cpu"
 
 # Гиперпараметры
 input_size = 2  # Размерность входных данных
 output_size = 1  # Размерность выходных данных
 hidden_size = 270  # Новое количество нейронов на слое
 learning_rate = 0.1
-EPOCHS = 10
+EPOCHS = 20
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
+
 
 
 def normalize_data(data):
@@ -88,10 +89,11 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
         else:
             print(f"Директория {path_to_save_weights} уже существует")
 
+
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    def train_one_epoch(epoch_index, tb_writer, l2_reg_coeff=0.001):
+    def train_one_epoch(epoch_index, tb_writer, l2_reg_coeff=0.01):
 
         running_loss = 0.
         last_loss = 0.
@@ -262,45 +264,9 @@ def jit(model, experiment_name, x=None):
     torch.jit.save(traced_net, directory + experiment_name + '.pt')
 
 
-# def get_potential(model):
+def get_potential_formula(model):
 
-
-if __name__ == "__main__":
-    torch.manual_seed(42)
-
-    experiment = "CNN_MR_2term"
-
-    print("loading data...")
-
-    # train_dataloader, test_dataloader = load_data(
-    #     "full_data_names.txt",
-    #     batch_size=1)
-
-    # train_dataloader = load_data(
-    #     "one_data_names.txt", batch_size=1)
-    # test_dataloader = load_data(
-    #     "another_one_data_name.txt", batch_size=1)
-    #
-    # trained_model = train(
-    #     train_dataloader,
-    #     test_dataloader,
-    #     plot_loss=True,
-    #     experiment_name=experiment)
-
-    print("test data...")
-    trained_model = StrainEnergyCANN(batch_size=1, device=device)
-    # for epoch_number in range(10):
-    #     trained_model.load_state_dict(torch.load('pretrained_models/CNN_MR_full_2term_l2/20240313_131752_' + str(epoch_number) + ".pth"))
-    #     # test(trained_model, test_dataloader, plot_err=True)
-    #     print(f"Epoch {epoch_number}: {trained_model.get_potential()}")
-    # print(trained_model)
-
-    trained_model.load_state_dict(
-        torch.load('pretrained_models/CNN_MR_full_2term_l2/20240313_131752_7.pth'))
-
-    raw_params = trained_model.get_potential()
-
-    # Разделение параметров и вычисление коэффициентов
+    raw_params = model.get_potential()
     mid = len(raw_params) // 2
     first_half = raw_params[:mid]
     second_half = raw_params[mid:]
@@ -320,8 +286,68 @@ if __name__ == "__main__":
     # Вывод формулы
     sp.pprint(psi)
 
-    psi_evaluated = psi.subs({I1: 4, I2: 4}).evalf()
-    print(psi_evaluated)
+
+if __name__ == "__main__":
+    torch.manual_seed(42)
+
+    experiment = "CNN_MR_2term_2/"
+
+    print("loading data...")
+
+    # train_dataloader, test_dataloader = load_data(
+    #     "full_data_names.txt",
+    #     batch_size=1)
+
+    # train_dataloader = load_data(
+    #     "one_data_names.txt", batch_size=1)
+    # test_dataloader = load_data(
+    #     "another_one_data_name.txt", batch_size=1)
+
+    # trained_model = train(
+    #     train_dataloader,
+    #     test_dataloader,
+    #     plot_loss=True,
+    #     experiment_name=experiment)
+
+    print("test data...")
+    trained_model = StrainEnergyCANN(batch_size=1, device=device)
+    potential_files = os.listdir("pretrained_models/" + experiment)
+    for epoch_number, file in enumerate(potential_files):
+        # trained_model.load_state_dict(torch.load('pretrained_models/CNN_MR_2term_2/20240326_210215_' + str(epoch_number) + ".pth"))
+        trained_model.load_state_dict(torch.load("pretrained_models/" + experiment + file))
+        # test(trained_model, test_dataloader, plot_err=True)
+        print(f"Epoch {epoch_number}: {trained_model.get_potential()}")
+        print("-------------------------------------------------------------------------------------------------------")
+        get_potential_formula(trained_model)
+    print(trained_model)
+
+    # trained_model.load_state_dict(
+    #     torch.load('pretrained_models/CNN_MR_full_2term_l2/20240313_131752_7.pth'))
+
+
+    # # Разделение параметров и вычисление коэффициентов
+    # raw_params = trained_model.get_potential()
+    # mid = len(raw_params) // 2
+    # first_half = raw_params[:mid]
+    # second_half = raw_params[mid:]
+    # coefficients = [first_half[i] * second_half[i] for i in range(mid)]
+    #
+    # # Инициализация символов SymPy
+    # I1, I2 = sp.symbols('I1 I2')
+    #
+    # # Проверка на количество коэффициентов
+    # if len(coefficients) < 4:
+    #     raise ValueError("Для формулы требуется как минимум 4 коэффициента")
+    #
+    # # Подставляем коэффициенты в формулу
+    # psi = (coefficients[0] * (I1 - 3) + coefficients[2] * (I2 - 3) +
+    #        coefficients[1] * (I1 - 3) ** 2 + coefficients[3] * (I2 - 3) ** 2)
+    #
+    # # Вывод формулы
+    # sp.pprint(psi)
+    #
+    # psi_evaluated = psi.subs({I1: 4, I2: 4}).evalf()
+    # print(psi_evaluated)
     # x1 = torch.randn(1).to(device)
     # x2 = torch.randn(1).to(device)
     # # print(x1)

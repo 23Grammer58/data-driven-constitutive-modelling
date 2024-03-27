@@ -1,1 +1,1 @@
-C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\biaxial_three_different_holes.xlsx
+../../data/biaxial_three_different_holes.xlsx
