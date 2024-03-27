@@ -31,7 +31,7 @@ def piola_kirchgoff_2(f1, f2, C_inv, miu=6600, H=1):
 
 
 def Mooney_Rivlin_psi(I1, I2):
-    return 10 * (I1 - 3) + 5 * (I2 - 3)
+    return 0.0221 * (I1 - 3) + 5 * 10**(-8) * (I2 - 3)
 
 
 def NeoHookean_psi(I1, I2):
