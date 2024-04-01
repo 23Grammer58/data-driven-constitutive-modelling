@@ -38,6 +38,32 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 
 
+def Stress_calc_inv(inputs):
+    """
+
+    :param inputs:     dPsidI1, dPsidI2, C = inputs
+
+    :return:
+    """
+    dPsidI1, dPsidI2, C = inputs
+
+    I2 = np.linalg.det(C)
+    dPsidI3 = torch.tensor(1.0, dtype=torch.float32)
+    two = torch.tensor(2.0, dtype=torch.float32)
+
+    dI1dC = torch.eye(2)
+    dI2dC = I2 * C.inv()
+    dI3dC = torch.tensor(0, dtype=torch.float32)
+
+    # Shear stress
+    stress = two * (dPsidI1 * dI1dC + dPsidI2 * dI2dC + dPsidI3 * dI3dC)
+
+    return stress
+
+
+def myGradient(output, input):
+    return torch.autograd.grad(output, input, torch.ones_like(a), create_graph=True)[0]
+
 
 def normalize_data(data):
     mean = data.mean()
@@ -45,8 +71,8 @@ def normalize_data(data):
     return (data - mean) / std
 
 
-def load_data(path_to_exp_names, batch_size):
-    dataset = ExcelDataset(path=path_to_exp_names, transform=normalize_data)
+def load_data(path_to_exp_names, batch_size, tranform=normalize_data):
+    dataset = ExcelDataset(path=path_to_exp_names, transform=tranform)
     # print("data len =", len(dataset))
     # Нормализация входных данных
     # dataset.features = normalize_data(dataset.features)
@@ -56,6 +82,7 @@ def load_data(path_to_exp_names, batch_size):
 
     # Создание DataLoader
     # dataset_t = TensorDataset(normalized_fetures, labels)
+
     dataset_t = TensorDataset(dataset.features, dataset.target)
     # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
     # train_size = int(0.9 * len(dataset_t))
@@ -121,8 +148,12 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
             optimizer.zero_grad()
             # i1_inputs=inputs[:, :1]
             # i2_inputs = inputs[:, 1:]
-            outputs = model(inputs)
+            psi_model = model(inputs)
 
+            dpsidI1_model = myGradient(psi_model, inputs[0])
+            dpsidI2_model = myGradient(psi_model, inputs[1])
+
+            stress_model = Stress_calc_inv(dpsidI1_model, dpsidI2_model)
             loss = loss_fn(outputs, targets)
 
             coefs = model.get_potential()
@@ -338,7 +369,9 @@ if __name__ == "__main__":
     # # train_dataloader, test_dataloader = load_data(
     # #     "full_data_names.txt",
     # #     batch_size=1)
-    #
+    data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
+
+    load_data(data_path, 1, None)
     # train_dataloader = load_data(
     #     "one_data_names.txt", batch_size=1)
     # test_dataloader = load_data(
@@ -351,17 +384,17 @@ if __name__ == "__main__":
     #     experiment_name=experiment)
 
 
-    print("test data...")
-    trained_model = StrainEnergyCANN(batch_size=1, device=device)
-    potential_files = os.listdir("pretrained_models/" + experiment)
-    for epoch_number, file in enumerate(potential_files):
-        # trained_model.load_state_dict(torch.load('pretrained_models/CNN_MR_2term_2/20240326_210215_' + str(epoch_number) + ".pth"))
-        trained_model.load_state_dict(torch.load("pretrained_models/" + experiment + file))
-        # test(trained_model, test_dataloader, plot_err=True)
-        print(f"Epoch {epoch_number}: {trained_model.get_potential()}")
-        print("-------------------------------------------------------------------------------------------------------")
-        get_potential_formula(trained_model)
-    print(trained_model)
+    # print("test data...")
+    # trained_model = StrainEnergyCANN(batch_size=1, device=device)
+    # potential_files = os.listdir("pretrained_models/" + experiment)
+    # for epoch_number, file in enumerate(potential_files):
+    #     # trained_model.load_state_dict(torch.load('pretrained_models/CNN_MR_2term_2/20240326_210215_' + str(epoch_number) + ".pth"))
+    #     trained_model.load_state_dict(torch.load("pretrained_models/" + experiment + file))
+    #     # test(trained_model, test_dataloader, plot_err=True)
+    #     print(f"Epoch {epoch_number}: {trained_model.get_potential()}")
+    #     print("-------------------------------------------------------------------------------------------------------")
+    #     get_potential_formula(trained_model)
+    # print(trained_model)
 
     # trained_model.load_state_dict(
     #     torch.load('pretrained_models/CNN_MR_full_2term_l2/20240313_131752_7.pth'))
