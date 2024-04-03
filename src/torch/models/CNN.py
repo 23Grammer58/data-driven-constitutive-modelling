@@ -26,6 +26,49 @@ def flatten(l):
     return [item for sublist in l for item in sublist]
 
 
+def myGradient(a, b):
+    return torch.autograd.grad(a, b, torch.ones_like(a), create_graph=True)[0]
+
+
+def Stress_calc_TC(inputs):
+    dPsidI1, dPsidI2, Stretch = inputs
+
+    one = torch.tensor(1.0, dtype=torch.float32)
+    two = torch.tensor(2.0, dtype=torch.float32)
+
+    minus  = two * (dPsidI1 * 1 / (Stretch**2) + dPsidI2 * 1 / (Stretch**3))
+    stress = two * (dPsidI1 * Stretch + dPsidI2 * one) - minus
+
+    return stress
+
+
+def Stress_calc_SS(inputs):
+    dPsidI1, dPsidI2, gamma = inputs
+
+    two = torch.tensor(2.0, dtype=torch.float32)
+
+    # Shear stress
+    stress = two * gamma * (dPsidI1 + dPsidI2)
+
+    return stress
+
+
+def Stress_calc_inv(inputs):
+    dPsidI1, dPsidI2, C = inputs
+
+    dPsidI3 = torch.tensor(1.0, dtype=torch.float32)
+    two = torch.tensor(2.0, dtype=torch.float32)
+
+    dI1dC = torch.eye(2)
+    dI2dC = I2 * C.inv()
+    dI3dC = torch.tensor(0, dtype=torch.float32)
+
+    # Shear stress
+    stress = two * (dPsidI1 * dI1dC + dPsidI2 * dI2dC + dPsidI3 * dI3dC)
+
+    return stress
+
+
 # Self defined activation functions for exp
 def activation_Exp(x):
     return 1.0*(torch.exp(x) -1.0)
@@ -138,6 +181,7 @@ class StrainEnergyCANN(nn.Module):
         self.single_inv_net1 = SingleInvNet4(batch_size, 0, device)
         self.single_inv_net2 = SingleInvNet4(batch_size, 4, device)
         self.wx2 = nn.Linear(8, 1, bias=False)
+        self.P = Stress_calc_inv
 
     # def forward(self, i1: torch.Tensor, i2: torch.Tensor) -> torch.Tensor:
     def forward(self, invariants: torch.Tensor) -> torch.Tensor:
@@ -158,6 +202,7 @@ class StrainEnergyCANN(nn.Module):
         # out = torch.cat((i1_out, i2_out), dim=1)
         # out = out.view(-1, 8)  # Изменение формы перед применением линейного слоя
         psi_model = self.wx2(psi_model)
+        stress_model = self.P()
         return psi_model
 
     def get_potential(self):
@@ -184,6 +229,37 @@ class StrainEnergyCANN(nn.Module):
         #                   sp.exp(w1[7] * (I2 - 3) ** 2) - 1)
         return params
 
+
+class StrainEnergyCANN_C(nn.Module):
+    def __init__(self, batch_size, device, stress_calc=Stress_calc_inv):
+        super().__init__()
+        self.potential_constants = np.zeros(16)
+        self.device = device
+        self.batch_size = batch_size
+        self.single_inv_net1 = SingleInvNet4(batch_size, 0, device)
+        self.single_inv_net2 = SingleInvNet4(batch_size, 4, device)
+        self.wx2 = nn.Linear(8, 1, bias=False)
+        self.P = stress_calc
+
+    # def forward(self, i1: torch.Tensor, i2: torch.Tensor) -> torch.Tensor:
+    def forward(self, C: torch.Tensor) -> torch.Tensor:
+
+        i1 = np.trace(C)
+        i2 = np.linalg.det(C)
+
+        if self.batch_size == 1:
+
+            i1_out = self.single_inv_net1(i1.unsqueeze(0))
+            i2_out = self.single_inv_net2(i2.unsqueeze(0))
+
+        psi_model = torch.cat((i1_out, i2_out))
+        # out = torch.cat((i1_out, i2_out), dim=1)
+        # out = out.view(-1, 8)  # Изменение формы перед применением линейного слоя
+        psi_model = self.wx2(psi_model)
+        dpsidi1 = myGradient(psi_model, i1)
+        dpsidi2 = myGradient(psi_model, i2)
+        stress_model = self.P((dpsidi1, dpsidi2, C))
+        return stress_model
 
 if __name__ == "__main__":
 
