@@ -45,9 +45,20 @@ def normalize_data(data):
     return (data - mean) / std
 
 
+def number_to_matrix12(number):
+    matrix = np.zeros((3, 3))
+    matrix[0, 1] = number
+    return matrix
+
+
+def number_to_matrix11(number):
+    matrix = np.zeros((3, 3))
+    matrix[0, 0] = number
+    return matrix
+
 class ExcelDataset(Dataset):
     """
-    A custom PyTorch Dataset for loading data from Excel files.
+    A custom PyTorch Dataset for loading mechanical experiments data from Excel files.
 
     Args:
         path (str): The path to the file containing the names of the Excel files to load.
@@ -66,7 +77,7 @@ class ExcelDataset(Dataset):
         __getitem__(idx): Returns the features and target for the item at index `idx`.
         read_from_file(): Reads the Excel files specified in the `path` file and returns the concatenated dataframe.
     """
-    def __init__(self, path="full_data_names.txt", transform=None, psi=May_Yin_psi, dataset_type=torch.float32, non_one = False):
+    def __init__(self, path="full_data_names.txt", transform=None, psi=May_Yin_psi, dataset_type=torch.float32, non_one=False):
         # super(Dataset, self).__init__()
         super().__init__()
 
@@ -84,19 +95,13 @@ class ExcelDataset(Dataset):
             self.target = torch.tensor(self.data.apply(
                 lambda row: psi(row['I1'], row['I2']), axis=1).values, dtype=torch.float32).unsqueeze(-1)
         else:
-            self.data = pd.read_excel(path,
-                                      sheet_name="Sheet2",
-                                      header=[1, 2, 3]
-                                    )
+            self.data = pd.read_excel(path, sheet_name="Sheet1", header=[1, 2, 3])
             self.target = None
-            self.features = None
+            self.features, self.target, self.F = self.full_field_data()
 
             self.dpsi = None
             self.lam = None
             self.invariants = None
-            self.F = None
-        # self.target = torch.tensor(self.data.apply(
-        #     lambda row: с(row['I1'], row['I2']), axis=1).values, dtype=torch.float32).unsqueeze(-1)
 
         # Normalize the features and target
         if transform is not None:
@@ -133,71 +138,39 @@ class ExcelDataset(Dataset):
         return pd.concat(data_frames, ignore_index=True)
 
     def full_field_data(self):
-        brain_CR_data = self.data.filter(like="CR").copy()
+        brain_CR_data_TC = self.data.filter(like="CR-comten").copy()
+        brain_CR_data_S = self.data.filter(like="CR-shr").copy().dropna(axis=1)
 
-        # data_array = brain_dataset.data.filter(like="CR").to_numpy().transpose()
+        brain_CR_data_TC.columns = brain_CR_data_TC.columns.droplevel(level=[0, 2])
+        brain_CR_data_S.columns = brain_CR_data_S.columns.droplevel(level=[0, 2])
 
-        brain_CR_data[("CR", 'T', 'I1')] = brain_CR_data[("CR", 'T', 'lambda')].apply(I1_tc)
-        brain_CR_data[("CR", 'T', 'I2')] = brain_CR_data[("CR", 'T', 'lambda')].apply(I2_tc)
+        brain_CR_data_TC["P"] = brain_CR_data_TC["P"].apply(number_to_matrix11)
+        brain_CR_data_S["P"] = brain_CR_data_S["P"].apply(number_to_matrix12)
 
-        brain_CR_data[("CR", 'C', 'I1')] = brain_CR_data[("CR", 'C', 'lambda')].apply(I1_tc)
-        brain_CR_data[("CR", 'C', 'I2')] = brain_CR_data[("CR", 'C', 'lambda')].apply(I2_tc)
+        brain_CR_data_TC['I1'] = brain_CR_data_TC[brain_CR_data_TC.columns[0]].apply(I1_tc)
+        brain_CR_data_TC['I2'] = brain_CR_data_TC[brain_CR_data_TC.columns[0]].apply(I2_tc)
+        brain_CR_data_TC['F'] = brain_CR_data_TC[brain_CR_data_TC.columns[0]].apply(F_tc)
 
-        brain_CR_data[("CR", 'S', 'I1')] = brain_CR_data[("CR", 'S', 'gamma')].apply(I1_s)
-        brain_CR_data[("CR", 'S', 'I2')] = brain_CR_data[("CR", 'S', 'gamma')].apply(I1_s)
+        brain_CR_data_S['I1'] = brain_CR_data_S[brain_CR_data_S.columns[0]].apply(I1_s)
+        brain_CR_data_S['I2'] = brain_CR_data_S[brain_CR_data_S.columns[0]].apply(I1_s)
+        brain_CR_data_S['F'] = brain_CR_data_S[brain_CR_data_S.columns[0]].apply(F_s)
 
-        brain_CR_data[("CR", 'T', 'F')] = brain_CR_data[("CR", 'T', 'lambda')].apply(F_tc)
-        brain_CR_data[("CR", 'C', 'F')] = brain_CR_data[("CR", 'C', 'lambda')].apply(F_tc)
+        I1 = pd.concat([brain_CR_data_TC['I1'], brain_CR_data_S['I1']], ignore_index=True)
+        I2 = pd.concat([brain_CR_data_TC['I2'], brain_CR_data_S['I2']], ignore_index=True)
+        F = pd.concat([brain_CR_data_TC['F'], brain_CR_data_S['F']], ignore_index=True)
 
-        brain_CR_data[("CR", 'S', 'F')] = brain_CR_data[("CR", 'S', 'gamma')].apply(F_s)
+        invariants = pd.concat([I1, I2], axis=1)
+        true_stress = pd.concat([brain_CR_data_TC["P"], brain_CR_data_S["P"]], ignore_index=True)
+
+        return invariants, true_stress, F
 
 
-class SimpleDataset(Dataset):
-    def __init__(self, data):
-        self.data = data
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx]
 
 
 if __name__ == "__main__":
 
-
     data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
 
     brain_dataset = ExcelDataset(data_path)
-
-    brain_CR_data = brain_dataset.data.filter(like="CR").copy()
-    print(brain_CR_data)
-
-    # data_array = brain_dataset.data.filter(like="CR").to_numpy().transpose()
-
-
-    brain_CR_data[("CR", 'T', 'I1')] = brain_CR_data[("CR", 'T', 'lambda')].apply(I1_tc)
-    brain_CR_data[("CR", 'T', 'I2')] = brain_CR_data[("CR", 'T', 'lambda')].apply(I2_tc)
-
-    brain_CR_data[("CR", 'C', 'I1')] = brain_CR_data[("CR", 'C', 'lambda')].apply(I1_tc)
-    brain_CR_data[("CR", 'C', 'I2')] = brain_CR_data[("CR", 'C', 'lambda')].apply(I2_tc)
-
-    brain_CR_data[("CR", 'S', 'I1')] = brain_CR_data[("CR", 'S', 'gamma')].apply(I1_s)
-    brain_CR_data[("CR", 'S', 'I2')] = brain_CR_data[("CR", 'S', 'gamma')].apply(I1_s)
-
-    brain_CR_data[("CR", 'T', 'F')] = brain_CR_data[("CR", 'T', 'lambda')].apply(F_tc)
-    brain_CR_data[("CR", 'C', 'F')] = brain_CR_data[("CR", 'C', 'lambda')].apply(F_tc)
-
-    brain_CR_data[("CR", 'S', 'F')] = brain_CR_data[("CR", 'S', 'gamma')].apply(F_s)
-
-    # print(brain_CR_data[("CR", 'C', 'F')][1])
-    print(brain_CR_data.columns)
-    # I2_s = lambda lam: 2 * lam + 1 / lam ** 2
-
-    # print(f"Tension and compression \n I1 = {I1_tc(data_array[0])}, \n  I2 = {I2_tc(data_array[0])}")
-    # print(f"I1 = {I1_tc(data_array[2])}, \n  I2 = {I2_tc(data_array[2])}")
-    #
-    # print(f"Shear \n I1 = {I1_s(data_array[4])}, \n  I2 = {I2_s(data_array[4])}")
-    # brain_dataset =
 
 
