@@ -15,7 +15,7 @@ import numpy as np
 import sympy as sp
 
 
-from models.CNN import StrainEnergyCANN
+from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C
 
 # print(torch.cuda.device_count())
 # print(torch.cuda.current_device())
@@ -117,7 +117,7 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
 
     # Инициализация модели, функции потерь и оптимизатор
     # а
-    model = StrainEnergyCANN(batch_size, device=device).to(device)
+    model = StrainEnergyCANN_C(batch_size, device=device).to(device)
 
     path_to_save_weights = os.path.join("pretrained_models", experiment_name)
     if experiment_name is not None:
@@ -371,17 +371,19 @@ if __name__ == "__main__":
     # #     batch_size=1)
     data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
 
-    load_data(data_path, 1, None)
     # train_dataloader = load_data(
     #     "one_data_names.txt", batch_size=1)
     # test_dataloader = load_data(
     #     "another_one_data_name.txt", batch_size=1)
-    #
-    # trained_model = train(
-    #     train_dataloader,
-    #     test_dataloader,
-    #     plot_loss=True,
-    #     experiment_name=experiment)
+
+    train_dataloader = load_data(
+        data_path, batch_size=1)
+
+    trained_model = train(
+        train_dataloader,
+        test_dataloader,
+        plot_loss=True,
+        experiment_name=experiment)
 
 
     # print("test data...")

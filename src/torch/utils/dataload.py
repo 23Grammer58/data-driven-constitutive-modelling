@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import DataLoader, random_split, Dataset, TensorDataset
 import torch
-from potential_zoo import May_Yin_psi
+# from potential_zoo import May_Yin_psi
 
 gamma = 0.2
 C_inv_shear = np.array([[1 + gamma * gamma, -gamma], [-gamma, 1]])
@@ -77,7 +77,7 @@ class ExcelDataset(Dataset):
         __getitem__(idx): Returns the features and target for the item at index `idx`.
         read_from_file(): Reads the Excel files specified in the `path` file and returns the concatenated dataframe.
     """
-    def __init__(self, path="full_data_names.txt", transform=None, psi=May_Yin_psi, dataset_type=torch.float32, non_one=False):
+    def __init__(self, path="full_data_names.txt", transform=None, psi=None, dataset_type=torch.float32, non_one=False):
         # super(Dataset, self).__init__()
         super().__init__()
 
