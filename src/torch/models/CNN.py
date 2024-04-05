@@ -244,13 +244,14 @@ class StrainEnergyCANN_C(nn.Module):
     # def forward(self, i1: torch.Tensor, i2: torch.Tensor) -> torch.Tensor:
     def forward(self, C: torch.Tensor) -> torch.Tensor:
 
-        i1 = np.trace(C)
-        i2 = np.linalg.det(C)
+        print(C)
+        i1 = torch.trace(C)
+        i2 = torch.det(C)
+        i1.requires_grad_(True)
+        i2.requires_grad_(True)
 
-        if self.batch_size == 1:
-
-            i1_out = self.single_inv_net1(i1.unsqueeze(0))
-            i2_out = self.single_inv_net2(i2.unsqueeze(0))
+        i1_out = self.single_inv_net1(i1)
+        i2_out = self.single_inv_net2(i2)
 
         psi_model = torch.cat((i1_out, i2_out))
         # out = torch.cat((i1_out, i2_out), dim=1)

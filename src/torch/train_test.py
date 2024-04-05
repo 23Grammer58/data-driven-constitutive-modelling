@@ -71,8 +71,8 @@ def normalize_data(data):
     return (data - mean) / std
 
 
-def load_data(path_to_exp_names, batch_size, tranform=normalize_data):
-    dataset = ExcelDataset(path=path_to_exp_names, transform=tranform)
+def load_data(path_to_exp_names, batch_size, transform=normalize_data):
+    dataset = ExcelDataset(path=path_to_exp_names, transform=transform)
     # print("data len =", len(dataset))
     # Нормализация входных данных
     # dataset.features = normalize_data(dataset.features)
@@ -83,7 +83,7 @@ def load_data(path_to_exp_names, batch_size, tranform=normalize_data):
     # Создание DataLoader
     # dataset_t = TensorDataset(normalized_fetures, labels)
 
-    dataset_t = TensorDataset(dataset.features, dataset.target)
+    # dataset_t = TensorDataset(dataset.features, dataset.target)
     # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
     # train_size = int(0.9 * len(dataset_t))
     # test_size = len(dataset_t) - train_size
@@ -92,7 +92,7 @@ def load_data(path_to_exp_names, batch_size, tranform=normalize_data):
     # print(test_dataset)
     # print("размер тестовой выборки", len(test_dataset))
 
-    dataset_loader = DataLoader(dataset_t, batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=True)
+    dataset_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=True)
     # train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
     # test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
 
@@ -140,6 +140,10 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
 
             last_data = len(train_loader)
             inputs, targets = data
+
+            inputs = inputs.reshape(-1, 3)
+            targets = targets.reshape(-1, 3)
+
             inputs, targets = inputs.to(device), targets.to(device)
             # if inputs.shape != (batch_size, 2):
             #     it += 1
@@ -148,13 +152,10 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
             optimizer.zero_grad()
             # i1_inputs=inputs[:, :1]
             # i2_inputs = inputs[:, 1:]
-            psi_model = model(inputs)
+            stress_model = model(inputs)
 
-            dpsidI1_model = myGradient(psi_model, inputs[0])
-            dpsidI2_model = myGradient(psi_model, inputs[1])
-
-            stress_model = Stress_calc_inv(dpsidI1_model, dpsidI2_model)
-            loss = loss_fn(outputs, targets)
+            # stress_model = Stress_calc_inv(dpsidI1_model, dpsidI2_model)
+            loss = loss_fn(stress_model, targets)
 
             coefs = model.get_potential()
 
@@ -362,7 +363,7 @@ def get_potential_formula(model):
 if __name__ == "__main__":
     torch.manual_seed(42)
 
-    experiment = "CNN_MY_4term/"
+    experiment = "CNN_brain_4term_C/"
 
     # print("loading data...")
     #
@@ -377,11 +378,13 @@ if __name__ == "__main__":
     #     "another_one_data_name.txt", batch_size=1)
 
     train_dataloader = load_data(
-        data_path, batch_size=1)
+        data_path,
+        batch_size=1,
+        transform=None)
 
     trained_model = train(
         train_dataloader,
-        test_dataloader,
+        train_dataloader,
         plot_loss=True,
         experiment_name=experiment)
 

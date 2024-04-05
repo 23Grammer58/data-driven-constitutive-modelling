@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import DataLoader, random_split, Dataset, TensorDataset
 import torch
-# from potential_zoo import May_Yin_psi
+from scipy.sparse import csr_matrix
 
+# from potential_zoo import May_Yin_psi
+dataset_type = torch.float32
 gamma = 0.2
 C_inv_shear = np.array([[1 + gamma * gamma, -gamma], [-gamma, 1]])
 
@@ -13,10 +15,9 @@ f2 = lambda invariant: - 2 / invariant ** 2
 I1_tc = lambda lam: lam ** 2 + 2.0 / lam
 I2_tc = lambda lam: 2.0 * lam + 1 / lam ** 2
 I1_s = lambda gam: gam ** 2 + 3.0
-
-F_tc = lambda lam: np.eye(3) * [lam, lam ** (-0.5), lam ** (-0.5)]
-F_s = lambda gam: np.array([[1., gam, 0], [0, 1., 0], [0, 0, 1.]])
-
+                                     # ([lam, 0, 0], [0, lam ** (-0.5), 0], [0, 0, lam ** (-0.5)])
+F_tc = lambda lam: torch.tensor(([lam, 0, 0], [0, lam ** (-0.5), 0], [0, 0, lam ** (-0.5)]), dtype=dataset_type)
+F_s = lambda gam: torch.tensor(([1., gam, 0], [0, 1., 0], [0, 0, 1.]), dtype=dataset_type)
 
 
 def di_df():
@@ -46,15 +47,18 @@ def normalize_data(data):
 
 
 def number_to_matrix12(number):
-    matrix = np.zeros((3, 3))
+    matrix = torch.zeros(3, 3, dtype=torch.float32)
     matrix[0, 1] = number
+    # return csr_matrix(matrix)
     return matrix
 
 
 def number_to_matrix11(number):
-    matrix = np.zeros((3, 3))
+    matrix = torch.zeros(3, 3, dtype=torch.float32)
     matrix[0, 0] = number
+    # return csr_matrix(matrix)
     return matrix
+
 
 class ExcelDataset(Dataset):
     """
@@ -77,13 +81,20 @@ class ExcelDataset(Dataset):
         __getitem__(idx): Returns the features and target for the item at index `idx`.
         read_from_file(): Reads the Excel files specified in the `path` file and returns the concatenated dataframe.
     """
-    def __init__(self, path="full_data_names.txt", transform=None, psi=None, dataset_type=torch.float32, non_one=False):
+    def __init__(
+                self,
+                path="full_data_names.txt",
+                transform=None,
+                psi=None,
+                dataset_type=torch.float32,
+                multiple_experiments=False
+    ):
         # super(Dataset, self).__init__()
         super().__init__()
 
-        self.path = path
+        # self.path = path
 
-        if non_one:
+        if multiple_experiments:
             self.data = self.read_from_file()
 
             self.features = torch.tensor(self.data.drop(columns=['d(psi)/d(I1)', 'd(psi)/d(I2)']).values,
@@ -95,13 +106,22 @@ class ExcelDataset(Dataset):
             self.target = torch.tensor(self.data.apply(
                 lambda row: psi(row['I1'], row['I2']), axis=1).values, dtype=torch.float32).unsqueeze(-1)
         else:
-            self.data = pd.read_excel(path, sheet_name="Sheet1", header=[1, 2, 3])
-            self.target = None
-            self.features, self.target, self.F = self.full_field_data()
+            self.data = self.full_field_data(path)
+            # self.features, self.target, self.F = self.full_field_data(path)
+            self.invariants = self.data["invariants"]
+            self.target = self.data["P"]
+            self.features = self.data["F"]
+            # self.features = torch.(self.features.values)
+            # for value in self.F.values:
+            #     value = torch.from_numpy(value)
+            # self.F = torch.from_numpy(self.F.values)
+            # self.target = torch.tensor(self.target.values, dtype=dataset_type)
+            # for value in self.target.values:
+            #     value = torch.from_numpy(value)
 
-            self.dpsi = None
-            self.lam = None
-            self.invariants = None
+            # self.dpsi = None
+            # self.lam = None
+            # self.invariants = None
 
         # Normalize the features and target
         if transform is not None:
@@ -113,8 +133,8 @@ class ExcelDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        features = torch.tensor(self.data.iloc[idx, :2].values, dtype=torch.float32)
-        target = torch.tensor(self.data.iloc[idx, 2:].values, dtype=torch.float32)
+        features = torch.tensor(self.data.iloc[idx, 0], dtype=torch.float32)
+        target = torch.tensor(self.data.iloc[idx, 2], dtype=torch.float32)
 
         if self.transform:
             features, target = self.transform(features, target)
@@ -137,9 +157,10 @@ class ExcelDataset(Dataset):
 
         return pd.concat(data_frames, ignore_index=True)
 
-    def full_field_data(self):
-        brain_CR_data_TC = self.data.filter(like="CR-comten").copy()
-        brain_CR_data_S = self.data.filter(like="CR-shr").copy().dropna(axis=1)
+    def full_field_data(self, path):
+        all_data = pd.read_excel(path, sheet_name="Sheet1", header=[1, 2, 3])
+        brain_CR_data_TC = all_data.filter(like="CR-comten").copy()
+        brain_CR_data_S = all_data.filter(like="CR-shr").copy().dropna(axis=1)
 
         brain_CR_data_TC.columns = brain_CR_data_TC.columns.droplevel(level=[0, 2])
         brain_CR_data_S.columns = brain_CR_data_S.columns.droplevel(level=[0, 2])
@@ -158,13 +179,15 @@ class ExcelDataset(Dataset):
         I1 = pd.concat([brain_CR_data_TC['I1'], brain_CR_data_S['I1']], ignore_index=True)
         I2 = pd.concat([brain_CR_data_TC['I2'], brain_CR_data_S['I2']], ignore_index=True)
         F = pd.concat([brain_CR_data_TC['F'], brain_CR_data_S['F']], ignore_index=True)
+        C = F.apply(lambda x: x.t().matmul(x))
+        # invariants = pd.concat([I1, I2], axis=1)
+        invariants = pd.Series(zip(torch.tensor(I1, dtype=dataset_type), torch.tensor(I2, dtype=dataset_type)))
+        invariants.name = "invariants"
 
-        invariants = pd.concat([I1, I2], axis=1)
-        true_stress = pd.concat([brain_CR_data_TC["P"], brain_CR_data_S["P"]], ignore_index=True)
-
-        return invariants, true_stress, F
-
-
+        true_stress = pd.concat([brain_CR_data_TC["P"], brain_CR_data_S["P"]], ignore_index=True, axis=0)
+        data = pd.concat((C, invariants, true_stress), axis=1)
+        # print(data.iloc[1])
+        return data
 
 
 if __name__ == "__main__":
@@ -172,5 +195,19 @@ if __name__ == "__main__":
     data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
 
     brain_dataset = ExcelDataset(data_path)
+    f = brain_dataset.features
+    t = brain_dataset.target
+    # print(all(t[0].size))
+
+    print(f[10].dim())
+    print(type(t[10]))
+    print(brain_dataset[5])
+
+    a = F_s(0.1)
+    b = a.t() @ a
+    print(a)
+    print(a.dim())
+    print(b)
+    print(b.dim())
 
 
