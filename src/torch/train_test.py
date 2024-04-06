@@ -14,8 +14,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
 
-
 from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C
+
+from tqdm import tqdm
+
 
 # print(torch.cuda.device_count())
 # print(torch.cuda.current_device())
@@ -25,7 +27,7 @@ if torch.cuda.is_available():
     device = torch.device("cuda")
 else:
     device = torch.device("cpu")
-print(f"Selected device: {device}")
+# print(f"Selected device: {device}")
 device = "cpu"
 
 # Гиперпараметры
@@ -33,7 +35,7 @@ input_size = 2  # Размерность входных данных
 output_size = 1  # Размерность выходных данных
 hidden_size = 270  # Новое количество нейронов на слое
 learning_rate = 0.1
-EPOCHS = 20
+EPOCHS = 1000
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 
@@ -119,8 +121,8 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
     # а
     model = StrainEnergyCANN_C(batch_size, device=device).to(device)
 
-    path_to_save_weights = os.path.join("pretrained_models", experiment_name)
     if experiment_name is not None:
+        path_to_save_weights = os.path.join("pretrained_models", experiment_name)
         if not os.path.exists(path_to_save_weights):
             os.makedirs(path_to_save_weights)
             print(f"Директория {path_to_save_weights} успешно создана")
@@ -136,9 +138,9 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
         running_loss = 0.
         last_loss = 0.
 
+        last_data = len(train_loader)
         for i, data in enumerate(train_loader):
 
-            last_data = len(train_loader)
             inputs, targets = data
 
             inputs = inputs.reshape(-1, 3)
@@ -196,8 +198,8 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
     vlosses = []
 
     # Обучение модели
-    for epoch in range(EPOCHS):
-        print('EPOCH {}:'.format(epoch_number + 1))
+    for epoch in tqdm(range(EPOCHS)):
+        # print('EPOCH {}:'.format(epoch_number + 1))
 
         # Make sure gradient tracking is on, and do a pass over the data
         model.train(True)
@@ -207,38 +209,44 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
         # Set the model to evaluation mode, disabling dropout and using population
         # statistics for batch normalization.
         model.eval()
-
-        # Disable gradient computation and reduce memory consumption.
-        with torch.no_grad():
-            for i, vdata in enumerate(test_loader):
-                vinputs, vlabels = vdata
-                voutputs = model(vinputs).to(device)
-                vloss = loss_fn(voutputs, vlabels)
-                running_vloss += vloss
-                vlosses.append(vloss)
-
-        avg_vloss = running_vloss / (i + 1)
-        print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
-
-        # Log the running loss averaged per batch
-        # for both training and avg
-        writer.add_scalars('Training vs. Validation Loss',
-                           {'Training': avg_loss, 'valid': avg_vloss},
-                           epoch_number + 1)
-        writer.flush()
-
-        # Track best performance, and save the model's state
-        if avg_vloss < best_vloss:
-            best_vloss = avg_vloss
-        # torch.save(model.state_dict(), model_path)
-
+        #
+        # # Disable gradient computation and reduce memory consumption.
+        # with torch.no_grad():
+        #     for i, vdata in enumerate(test_loader):
+        #         vinputs, vlabels = vdata
+        #         vinputs = vinputs.reshape(-1, 3)
+        #         vlabels = vlabels.reshape(-1, 3)
+        #
+        #         voutputs = model(vinputs).to(device)
+        #         vloss = loss_fn(voutputs, vlabels)
+        #         running_vloss += vloss
+        #         vlosses.append(vloss)
+        #
+        # avg_vloss = running_vloss / (i + 1)
+        # print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
+        #
+        # # Log the running loss averaged per batch
+        # # for both training and avg
+        # writer.add_scalars('Training vs. Validation Loss',
+        #                    {'Training': avg_loss, 'valid': avg_vloss},
+        #                    epoch_number + 1)
+        # writer.flush()
+        #
+        # # Track best performance, and save the model's state
         model_path = '{}_{}'.format(timestamp, epoch_number)
         path_to_save_weights = os.path.join("pretrained_models", experiment_name)
         path_to_save_weights = os.path.join(path_to_save_weights, model_path + ".pth")
-        torch.save(model.state_dict(), path_to_save_weights)
-        print(f"Saved PyTorch Model State to {path_to_save_weights}")
 
-        elosses.append(avg_vloss)
+        if avg_loss < best_vloss:
+            best_vloss = avg_loss
+            print(f"Saved PyTorch Model State to {path_to_save_weights}")
+            torch.save(model.state_dict(), model_path)
+
+        if epoch % 500 == 0:
+            torch.save(model.state_dict(), path_to_save_weights)
+            print(f"Saved PyTorch Model State to {path_to_save_weights}")
+
+        elosses.append(avg_loss)
         epoch_number += 1
         # if (epoch + 1) % 10 == 0:
         #     print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
@@ -360,46 +368,80 @@ def get_potential_formula(model):
     sp.pprint(psi)
 
 
+def get_potential_formula_6term(model):
+
+    raw_params = model.get_potential()
+    # print(raw_params)
+    mid = len(raw_params) // 2
+    first_half = raw_params[:mid]
+    second_half = raw_params[mid:]
+    coefficients = [first_half[i] * second_half[i] for i in range(mid)]
+
+    # Инициализация символов SymPy
+    I1, I2 = sp.symbols('I1 I2')
+
+    # Проверка на количество коэффициентов
+    # if len(coefficients) < 4:
+    #     raise ValueError("Для формулы требуется как минимум 4 коэффициента")
+
+    # Подставляем коэффициенты в формулу
+    psi = (coefficients[0] * (I1 - 3)
+           + coefficients[2] * (I2 - 3)
+           + coefficients[1] * (I1 - 3) ** 2
+           + coefficients[3] * (I2 - 3) ** 2
+           + coefficients[4] * sp.exp(I1 - 3)
+           + coefficients[6] * sp.exp(I2 - 3)
+           + coefficients[5] * sp.exp(I1 - 3) ** 2
+           + coefficients[7] * sp.exp(I2 - 3) ** 2)
+
+    # Вывод формулы
+    sp.pprint(psi)
+
+
+
 if __name__ == "__main__":
     torch.manual_seed(42)
 
-    experiment = "CNN_brain_4term_C/"
-
+    experiment = "CNN_brain_6term_C/"
+    # experiment = None
     # print("loading data...")
     #
-    # # train_dataloader, test_dataloader = load_data(
-    # #     "full_data_names.txt",
-    # #     batch_size=1)
-    data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
+    # train_dataloader, test_dataloader = load_data(
+    #     "full_data_names.txt",
+    #     batch_size=1)
+    data_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
-    # train_dataloader = load_data(
+    # train_dataloader= load_data(
     #     "one_data_names.txt", batch_size=1)
     # test_dataloader = load_data(
     #     "another_one_data_name.txt", batch_size=1)
 
-    train_dataloader = load_data(
-        data_path,
-        batch_size=1,
-        transform=None)
+    # train_dataloader = load_data(
+    #     data_path,
+    #     batch_size=1,
+    #     transform=None)
+    #
+    # trained_model = train(
+    #     train_dataloader,
+    #     train_dataloader,
+    #     plot_loss=True,
+    #     experiment_name=experiment)
 
-    trained_model = train(
-        train_dataloader,
-        train_dataloader,
-        plot_loss=True,
-        experiment_name=experiment)
 
-
-    # print("test data...")
-    # trained_model = StrainEnergyCANN(batch_size=1, device=device)
-    # potential_files = os.listdir("pretrained_models/" + experiment)
-    # for epoch_number, file in enumerate(potential_files):
-    #     # trained_model.load_state_dict(torch.load('pretrained_models/CNN_MR_2term_2/20240326_210215_' + str(epoch_number) + ".pth"))
-    #     trained_model.load_state_dict(torch.load("pretrained_models/" + experiment + file))
-    #     # test(trained_model, test_dataloader, plot_err=True)
-    #     print(f"Epoch {epoch_number}: {trained_model.get_potential()}")
-    #     print("-------------------------------------------------------------------------------------------------------")
-    #     get_potential_formula(trained_model)
-    # print(trained_model)
+    print("test data...")
+    trained_model = StrainEnergyCANN_C(batch_size=1, device=device)
+    potential_files = os.listdir("pretrained_models/" + experiment)
+    for epoch_number, file in enumerate(potential_files):
+        # trained_model.load_state_dict(torch.load('pretrained_models/CNN_MR_2term_2/20240326_210215_' + str(epoch_number) + ".pth"))
+        trained_model.load_state_dict(torch.load("pretrained_models/" + experiment + file))
+        # test(trained_model, test_dataloader, plot_err=True)
+        print(f"Epoch {epoch_number}: {trained_model.get_potential()}")
+        print("-------------------------------------------------------------------------------------------------------")
+        # get_potential_formula(trained_model)
+        print(trained_model.get_potential())
+        for id, param in enumerate(trained_model.parameters()):
+            print(f"num param = {id}, {param}")
+    print(trained_model)
 
     # trained_model.load_state_dict(
     #     torch.load('pretrained_models/CNN_MR_full_2term_l2/20240313_131752_7.pth'))
@@ -411,8 +453,8 @@ if __name__ == "__main__":
     # first_half = raw_params[:mid]
     # second_half = raw_params[mid:]
     # coefficients = [first_half[i] * second_half[i] for i in range(mid)]
-    #
-    # # Инициализация символов SymPy
+
+    # Инициализация символов SymPy
     # I1, I2 = sp.symbols('I1 I2')
     #
     # # Проверка на количество коэффициентов

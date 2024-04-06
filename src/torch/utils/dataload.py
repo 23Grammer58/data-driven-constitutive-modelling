@@ -141,7 +141,10 @@ class ExcelDataset(Dataset):
 
         return features, target
 
+
     # def __str__(self, ):
+
+
     def read_from_file(self):
         # Read the Excel files and concatenate them into a single dataframe
 
@@ -156,6 +159,7 @@ class ExcelDataset(Dataset):
         data_frames = [pd.read_excel(file) for file in excel_files]
 
         return pd.concat(data_frames, ignore_index=True)
+
 
     def full_field_data(self, path):
         all_data = pd.read_excel(path, sheet_name="Sheet1", header=[1, 2, 3])
@@ -191,8 +195,7 @@ class ExcelDataset(Dataset):
 
 
 if __name__ == "__main__":
-
-    data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
+    data_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
     brain_dataset = ExcelDataset(data_path)
     f = brain_dataset.features
@@ -203,11 +206,11 @@ if __name__ == "__main__":
     print(type(t[10]))
     print(brain_dataset[5])
 
-    a = F_s(0.1)
+    a = F_tc(0.1)
     b = a.t() @ a
-    print(a)
-    print(a.dim())
-    print(b)
-    print(b.dim())
+    print(a.t().inverse())
+    # print(a.dim())
+    # print(b)
+    # print(b.dim())
 
 

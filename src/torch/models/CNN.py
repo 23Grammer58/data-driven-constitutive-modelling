@@ -27,6 +27,7 @@ def flatten(l):
 
 
 def myGradient(a, b):
+
     return torch.autograd.grad(a, b, torch.ones_like(a), create_graph=True)[0]
 
 
@@ -55,12 +56,13 @@ def Stress_calc_SS(inputs):
 
 def Stress_calc_inv(inputs):
     dPsidI1, dPsidI2, C = inputs
+    I2 = 0.5 * (torch.trace(C)**2 - torch.trace(C @ C))
 
     dPsidI3 = torch.tensor(1.0, dtype=torch.float32)
     two = torch.tensor(2.0, dtype=torch.float32)
 
-    dI1dC = torch.eye(2)
-    dI2dC = I2 * C.inv()
+    dI1dC = torch.eye(3)
+    dI2dC = I2 * torch.inverse(C)
     dI3dC = torch.tensor(0, dtype=torch.float32)
 
     # Shear stress
@@ -75,7 +77,7 @@ def activation_Exp(x):
 
 
 def activation_ln(x):
-    return -1.0*math.log(1.0 - (x))
+    return -1.0*torch.log(1.0 - x)
 
 
 class SingleInvNet1(nn.Module):
@@ -172,6 +174,51 @@ class SingleInvNet4(nn.Module):
         return out
 
 
+class SingleInvNet6(nn.Module):
+    def __init__(self, input_size, idi, device, l2=0.001):
+        """
+        y=xA^T+b (b=0)
+        :param input_size: input data size
+        :param idi: index of neuron
+        :param l2: L2 regularization coefficient
+        """
+        super().__init__()
+
+        self.l2 = l2
+        self.idi = idi
+
+        self.w11 = nn.Linear(input_size, 1, bias=False).to(device)
+        self.w21 = nn.Linear(input_size, 1, bias=False).to(device)
+        self.w31 = nn.Linear(input_size, 1, bias=False).to(device)
+        self.w41 = nn.Linear(input_size, 1, bias=False).to(device)
+        self.w51 = nn.Linear(input_size, 1, bias=False).to(device)
+        self.w61 = nn.Linear(input_size, 1, bias=False).to(device)
+
+
+        self.activation_Exp = activation_Exp
+        self.activation_ln = activation_ln
+
+    def forward(self, i: torch.Tensor) -> torch.Tensor:
+        i_ref = i - 3.0
+
+        w11_out = self.w11(i_ref)
+
+        w21_out = self.activation_Exp(self.w21(i_ref))
+
+        w31_out = self.activation_ln(self.w31(i_ref))
+
+        i_sqr = torch.mul(i_ref, i_ref)
+
+        w41_out = self.w31(i_sqr)
+
+        w51_out = self.activation_Exp(self.w41(i_sqr))
+
+        w61_out = self.activation_ln(self.w61(i_ref))
+        # out = torch.cat((w11_out, w21_out, w31_out, w41_out), dim=1)
+        out = torch.cat((w11_out, w21_out, w31_out, w41_out, w51_out, w61_out))
+        return out
+
+
 class StrainEnergyCANN(nn.Module):
     def __init__(self, batch_size, device):
         super().__init__()
@@ -212,8 +259,8 @@ class StrainEnergyCANN(nn.Module):
         """
         params = []
         for id, weights in enumerate(self.parameters()):
-            # print(f"id = {id}, weight = {weights}")
-            if id == 8:
+            print(f"id = {id}, weight = {weights}")
+            if id == 12:
                 weights = weights.tolist()
                 for weight_last_layer in weights[0]:
                     # print(weight_last_layer)
@@ -236,31 +283,56 @@ class StrainEnergyCANN_C(nn.Module):
         self.potential_constants = np.zeros(16)
         self.device = device
         self.batch_size = batch_size
-        self.single_inv_net1 = SingleInvNet4(batch_size, 0, device)
-        self.single_inv_net2 = SingleInvNet4(batch_size, 4, device)
-        self.wx2 = nn.Linear(8, 1, bias=False)
+        self.single_inv_net1 = SingleInvNet6(batch_size, 0, device)
+        self.single_inv_net2 = SingleInvNet6(batch_size, 6, device)
+        self.wx2 = nn.Linear(12, 1, bias=False)
         self.P = stress_calc
 
     # def forward(self, i1: torch.Tensor, i2: torch.Tensor) -> torch.Tensor:
     def forward(self, C: torch.Tensor) -> torch.Tensor:
 
-        print(C)
+        # print(C)
         i1 = torch.trace(C)
-        i2 = torch.det(C)
+        i2 = 0.5 * (i1**2 - torch.trace(C @ C))
         i1.requires_grad_(True)
         i2.requires_grad_(True)
 
-        i1_out = self.single_inv_net1(i1)
-        i2_out = self.single_inv_net2(i2)
+        i1_out = self.single_inv_net1(i1.unsqueeze(0))
+        i2_out = self.single_inv_net2(i2.unsqueeze(0))
 
-        psi_model = torch.cat((i1_out, i2_out))
+        inv_out = torch.cat((i1_out, i2_out))
         # out = torch.cat((i1_out, i2_out), dim=1)
         # out = out.view(-1, 8)  # Изменение формы перед применением линейного слоя
-        psi_model = self.wx2(psi_model)
+        psi_model = self.wx2(inv_out)
         dpsidi1 = myGradient(psi_model, i1)
         dpsidi2 = myGradient(psi_model, i2)
         stress_model = self.P((dpsidi1, dpsidi2, C))
         return stress_model
+
+    def get_potential(self):
+        """
+
+        :return: [weights of model]
+        """
+        params = []
+        for id, weights in enumerate(self.parameters()):
+            # print(f"id = {id}, weight = {weights}")
+            if id == 8:
+                weights = weights.tolist()
+                for weight_last_layer in weights[0]:
+                    # print(weight_last_layer)
+                    params.append(weight_last_layer)
+                break
+            weight = weights.detach().to('cpu').numpy().copy()
+            params.append(weight[0, 0].item())
+            # params.append(param.data())
+
+        # psi = w2[0] * w1[0] * (I1 - 3) + w2[1] * (sp.exp(w1[1] * (I1 - 3)) - 1) + w2[2] * w1[2] * (I1 - 3) ** 2 + w2[
+        #     3] * (sp.exp(w1[3] * (I1 - 3) ** 2) - 1) + w2[4] * w1[4] * (I2 - 3) + w2[5] * (
+        #                   sp.exp(w1[5] * (I2 - 3)) - 1) + w2[6] * w1[6] * (I2 - 3) ** 2 + w2[7] * (
+        #                   sp.exp(w1[7] * (I2 - 3) ** 2) - 1)
+        return params
+
 
 if __name__ == "__main__":
 
