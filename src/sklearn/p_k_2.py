@@ -61,7 +61,7 @@ if __name__ == "__main__":
         C_arr.append(C_inv_ras(lambda1(invariant[0], invariant[1]),
                                lambda2(invariant[0], invariant[1])))
 
-    np.save("../torch/C_inv.npy", C_arr)
+    np.save("../torch/utils/C_inv.npy", C_arr)
 
 # save_pk2_anl()
 #     for invariant in X_val.values:
