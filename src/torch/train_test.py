@@ -18,7 +18,6 @@ from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C
 
 from tqdm import tqdm
 
-
 # print(torch.cuda.device_count())
 # print(torch.cuda.current_device())
 # print(torch.cuda.get_device_name(0))
@@ -40,41 +39,14 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 
 
-def Stress_calc_inv(inputs):
-    """
-
-    :param inputs:     dPsidI1, dPsidI2, C = inputs
-
-    :return:
-    """
-    dPsidI1, dPsidI2, C = inputs
-
-    I2 = np.linalg.det(C)
-    dPsidI3 = torch.tensor(1.0, dtype=torch.float32)
-    two = torch.tensor(2.0, dtype=torch.float32)
-
-    dI1dC = torch.eye(2)
-    dI2dC = I2 * C.inv()
-    dI3dC = torch.tensor(0, dtype=torch.float32)
-
-    # Shear stress
-    stress = two * (dPsidI1 * dI1dC + dPsidI2 * dI2dC + dPsidI3 * dI3dC)
-
-    return stress
-
-
-def myGradient(output, input):
-    return torch.autograd.grad(output, input, torch.ones_like(a), create_graph=True)[0]
-
-
 def normalize_data(data):
     mean = data.mean()
     std = data.std()
     return (data - mean) / std
 
 
-def load_data(path_to_exp_names, batch_size, transform=normalize_data):
-    dataset = ExcelDataset(path=path_to_exp_names, transform=transform)
+def load_data(path_to_exp_names, batch_size, transform=normalize_data, device=device):
+    dataset = ExcelDataset(path=path_to_exp_names, transform=transform, device=device)
     # print("data len =", len(dataset))
     # Нормализация входных данных
     # dataset.features = normalize_data(dataset.features)
@@ -94,7 +66,7 @@ def load_data(path_to_exp_names, batch_size, transform=normalize_data):
     # print(test_dataset)
     # print("размер тестовой выборки", len(test_dataset))
 
-    dataset_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=True)
+    dataset_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=False)
     # train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
     # test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
 
@@ -129,7 +101,6 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
         else:
             print(f"Директория {path_to_save_weights} уже существует")
 
-
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -141,12 +112,13 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
         last_data = len(train_loader)
         for i, data in enumerate(train_loader):
 
-            inputs, targets = data
+            lam, C, invariants, targets = data
 
-            inputs = inputs.reshape(-1, 3)
+            C = C.reshape(-1, 3)
+            inputs = (lam, C, invariants)
             targets = targets.reshape(-1, 3)
 
-            inputs, targets = inputs.to(device), targets.to(device)
+            # inputs, targets = inputs.to(device), targets.to(device)
             # if inputs.shape != (batch_size, 2):
             #     it += 1
             #     print(it)
@@ -156,21 +128,22 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
             # i2_inputs = inputs[:, 1:]
             stress_model = model(inputs)
 
-            # stress_model = Stress_calc_inv(dpsidI1_model, dpsidI2_model)
             loss = loss_fn(stress_model, targets)
 
-            coefs = model.get_potential()
+            # coefs = model.get_potential()
 
-            l2_reg = None
-            for param in coefs:
-                # print(param)
-                if l2_reg is None:
-                    l2_reg = param ** 2
-                else:
-                    l2_reg = l2_reg + param ** 2
-                # print("l2 reg = ", l2_reg)
+            # l2_reg = None
+            # for param in coefs:
+            #     # print(param)
+            #     if l2_reg is None:
+            #         l2_reg = param ** 2
+            #     else:
+            #         l2_reg = l2_reg + param ** 2
+            #     # print("l2 reg = ", l2_reg)
+            #
 
-            # Добавляем L2 регуляризацию к функции потерь
+            l2_reg = model.calc_l2()
+            # # Добавляем L2 регуляризацию к функции потерь
             if l2_reg is not None:
                 loss = loss + l2_reg_coeff * l2_reg
 
@@ -242,19 +215,18 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
             print(f"Saved PyTorch Model State to {path_to_save_weights}")
             torch.save(model.state_dict(), model_path)
 
-        if epoch % 500 == 0:
+        elif epoch % 10 == 0:
             torch.save(model.state_dict(), path_to_save_weights)
             print(f"Saved PyTorch Model State to {path_to_save_weights}")
 
         elosses.append(avg_loss)
         epoch_number += 1
-        # if (epoch + 1) % 10 == 0:
-        #     print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch + 1}/{EPOCHS}], Loss: {avg_loss.item():.4f}')
 
     plt.plot(vlosses)
     plt.show()
     if plot_loss:
-
         plt.plot(elosses)
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
@@ -316,7 +288,6 @@ def jit(model, experiment_name, x=None):
 
 
 def get_potential_formula_2term(model):
-
     raw_params = model.get_potential()
     mid = len(raw_params) // 2
     first_half = raw_params[:mid]
@@ -338,8 +309,7 @@ def get_potential_formula_2term(model):
     sp.pprint(psi)
 
 
-def get_potential_formula(model):
-
+def get_potential_formula_4term(model):
     raw_params = model.get_potential()
     # print(raw_params)
     mid = len(raw_params) // 2
@@ -369,40 +339,33 @@ def get_potential_formula(model):
 
 
 def get_potential_formula_6term(model):
-
-    raw_params = model.get_potential()
-    # print(raw_params)
-    mid = len(raw_params) // 2
-    first_half = raw_params[:mid]
-    second_half = raw_params[mid:]
-    coefficients = [first_half[i] * second_half[i] for i in range(mid)]
+    coefficients = model.get_potential()
 
     # Инициализация символов SymPy
     I1, I2 = sp.symbols('I1 I2')
 
-    # Проверка на количество коэффициентов
-    # if len(coefficients) < 4:
-    #     raise ValueError("Для формулы требуется как минимум 4 коэффициента")
-
     # Подставляем коэффициенты в формулу
-    psi = (coefficients[0] * (I1 - 3)
+    psi = (  coefficients[0] * (I1 - 3)
            + coefficients[2] * (I2 - 3)
            + coefficients[1] * (I1 - 3) ** 2
            + coefficients[3] * (I2 - 3) ** 2
            + coefficients[4] * sp.exp(I1 - 3)
            + coefficients[6] * sp.exp(I2 - 3)
            + coefficients[5] * sp.exp(I1 - 3) ** 2
-           + coefficients[7] * sp.exp(I2 - 3) ** 2)
+           + coefficients[7] * sp.exp(I2 - 3) ** 2
+           + coefficients[9] * sp.exp(I1 - 3) ** 2
+           + coefficients[11] * sp.exp(I2 - 3) ** 2
+
+    )
 
     # Вывод формулы
     sp.pprint(psi)
 
 
-
 if __name__ == "__main__":
     torch.manual_seed(42)
 
-    experiment = "CNN_brain_6term_C/"
+    experiment = "CNN_brain_6term_C_cuda/"
     # experiment = None
     # print("loading data...")
     #
@@ -416,20 +379,21 @@ if __name__ == "__main__":
     # test_dataloader = load_data(
     #     "another_one_data_name.txt", batch_size=1)
 
-    # train_dataloader = load_data(
-    #     data_path,
-    #     batch_size=1,
-    #     transform=None)
-    #
-    # trained_model = train(
-    #     train_dataloader,
-    #     train_dataloader,
-    #     plot_loss=True,
-    #     experiment_name=experiment)
+    train_dataloader = load_data(
+        data_path,
+        batch_size=1,
+        transform=None,
+        device=device
+    )
 
+    trained_model = train(
+        train_dataloader,
+        train_dataloader,
+        plot_loss=True,
+        experiment_name=experiment)
 
     print("test data...")
-    trained_model = StrainEnergyCANN_C(batch_size=1, device=device)
+    # trained_model = StrainEnergyCANN_C(batch_size=1, device=device)
     potential_files = os.listdir("pretrained_models/" + experiment)
     for epoch_number, file in enumerate(potential_files):
         # trained_model.load_state_dict(torch.load('pretrained_models/CNN_MR_2term_2/20240326_210215_' + str(epoch_number) + ".pth"))
@@ -445,7 +409,6 @@ if __name__ == "__main__":
 
     # trained_model.load_state_dict(
     #     torch.load('pretrained_models/CNN_MR_full_2term_l2/20240313_131752_7.pth'))
-
 
     # # Разделение параметров и вычисление коэффициентов
     # raw_params = trained_model.get_potential()

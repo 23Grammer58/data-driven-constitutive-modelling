@@ -87,13 +87,14 @@ class ExcelDataset(Dataset):
                 transform=None,
                 psi=None,
                 dataset_type=torch.float32,
-                multiple_experiments=False
+                multiple_experiments=False,
+                device = "cuda"
     ):
         # super(Dataset, self).__init__()
         super().__init__()
 
         # self.path = path
-
+        self.device = device
         if multiple_experiments:
             self.data = self.read_from_file()
 
@@ -109,8 +110,9 @@ class ExcelDataset(Dataset):
             self.data = self.full_field_data(path)
             # self.features, self.target, self.F = self.full_field_data(path)
             self.invariants = self.data["invariants"]
+            self.lam = self.data["lambda"]
             self.target = self.data["P"]
-            self.features = self.data["F"]
+            self.features = self.data["C"]
             # self.features = torch.(self.features.values)
             # for value in self.F.values:
             #     value = torch.from_numpy(value)
@@ -133,17 +135,19 @@ class ExcelDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        features = torch.tensor(self.data.iloc[idx, 0], dtype=torch.float32)
-        target = torch.tensor(self.data.iloc[idx, 2], dtype=torch.float32)
+
+        lam = torch.tensor(self.data.iloc[idx, 0], dtype=torch.float32, device=self.device)
+        C = torch.tensor(self.data.iloc[idx, 1], dtype=torch.float32, device=self.device)
+        features = torch.tensor(self.data.iloc[idx, 2], dtype=torch.float32, device=self.device)
+        target = torch.tensor(self.data.iloc[idx, 3], dtype=torch.float32, device=self.device)
 
         if self.transform:
             features, target = self.transform(features, target)
 
-        return features, target
+        return lam, C, features, target
 
 
     # def __str__(self, ):
-
 
     def read_from_file(self):
         # Read the Excel files and concatenate them into a single dataframe
@@ -160,37 +164,44 @@ class ExcelDataset(Dataset):
 
         return pd.concat(data_frames, ignore_index=True)
 
-
     def full_field_data(self, path):
         all_data = pd.read_excel(path, sheet_name="Sheet1", header=[1, 2, 3])
-        brain_CR_data_TC = all_data.filter(like="CR-comten").copy()
-        brain_CR_data_S = all_data.filter(like="CR-shr").copy().dropna(axis=1)
+        brain_CR_TC_data = all_data.filter(like="CR-comten").copy()
+        brain_CR_S_data = all_data.filter(like="CR-shr").copy().dropna(axis=1)
 
-        brain_CR_data_TC.columns = brain_CR_data_TC.columns.droplevel(level=[0, 2])
-        brain_CR_data_S.columns = brain_CR_data_S.columns.droplevel(level=[0, 2])
+        brain_CR_TC_data.columns = brain_CR_TC_data.columns.droplevel(level=[0, 2])
+        brain_CR_S_data.columns = brain_CR_S_data.columns.droplevel(level=[0, 2])
+        
+        # calculate 1 stress tensor PK
+        brain_CR_TC_data["P"] = brain_CR_TC_data["P"].apply(number_to_matrix11)
+        brain_CR_S_data["P"] = brain_CR_S_data["P"].apply(number_to_matrix12)
 
-        brain_CR_data_TC["P"] = brain_CR_data_TC["P"].apply(number_to_matrix11)
-        brain_CR_data_S["P"] = brain_CR_data_S["P"].apply(number_to_matrix12)
+        # calculate I1, I2, F from lambda (torsion&compression) 
+        lambdas = brain_CR_TC_data.columns[0]
+        brain_CR_TC_data['I1'] = brain_CR_TC_data[lambdas].apply(I1_tc)
+        brain_CR_TC_data['I2'] = brain_CR_TC_data[lambdas].apply(I2_tc)
+        brain_CR_TC_data['F'] = brain_CR_TC_data[lambdas].apply(F_tc)
 
-        brain_CR_data_TC['I1'] = brain_CR_data_TC[brain_CR_data_TC.columns[0]].apply(I1_tc)
-        brain_CR_data_TC['I2'] = brain_CR_data_TC[brain_CR_data_TC.columns[0]].apply(I2_tc)
-        brain_CR_data_TC['F'] = brain_CR_data_TC[brain_CR_data_TC.columns[0]].apply(F_tc)
+        # calculate I1, I2, F from gamma (shear)
+        gammas = brain_CR_S_data.columns[0]
+        brain_CR_S_data['I1'] = brain_CR_S_data[gammas].apply(I1_s)
+        brain_CR_S_data['I2'] = brain_CR_S_data[gammas].apply(I1_s)
+        brain_CR_S_data['F'] = brain_CR_S_data[gammas].apply(F_s)
 
-        brain_CR_data_S['I1'] = brain_CR_data_S[brain_CR_data_S.columns[0]].apply(I1_s)
-        brain_CR_data_S['I2'] = brain_CR_data_S[brain_CR_data_S.columns[0]].apply(I1_s)
-        brain_CR_data_S['F'] = brain_CR_data_S[brain_CR_data_S.columns[0]].apply(F_s)
-
-        I1 = pd.concat([brain_CR_data_TC['I1'], brain_CR_data_S['I1']], ignore_index=True)
-        I2 = pd.concat([brain_CR_data_TC['I2'], brain_CR_data_S['I2']], ignore_index=True)
-        F = pd.concat([brain_CR_data_TC['F'], brain_CR_data_S['F']], ignore_index=True)
+        lam = pd.concat([brain_CR_TC_data[lambdas], brain_CR_S_data[gammas]], ignore_index=True)
+        I1 = pd.concat([brain_CR_TC_data['I1'], brain_CR_S_data['I1']], ignore_index=True)
+        I2 = pd.concat([brain_CR_TC_data['I2'], brain_CR_S_data['I2']], ignore_index=True)
+        F = pd.concat([brain_CR_TC_data['F'], brain_CR_S_data['F']], ignore_index=True)
         C = F.apply(lambda x: x.t().matmul(x))
-        # invariants = pd.concat([I1, I2], axis=1)
-        invariants = pd.Series(zip(torch.tensor(I1, dtype=dataset_type), torch.tensor(I2, dtype=dataset_type)))
+
+        invariants = pd.Series(zip(torch.tensor(I1, dtype=dataset_type, device=self.device),
+                                   torch.tensor(I2, dtype=dataset_type, device=self.device)))
         invariants.name = "invariants"
 
-        true_stress = pd.concat([brain_CR_data_TC["P"], brain_CR_data_S["P"]], ignore_index=True, axis=0)
-        data = pd.concat((C, invariants, true_stress), axis=1)
-        # print(data.iloc[1])
+        true_stress = pd.concat([brain_CR_TC_data["P"], brain_CR_S_data["P"]], ignore_index=True, axis=0)
+        data = pd.concat((lam, C, invariants, true_stress), axis=1)
+        data = data.rename(columns={0: 'lambda', 'F': 'C'})
+        print(data.iloc[1])
         return data
 
 
@@ -198,19 +209,28 @@ if __name__ == "__main__":
     data_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
     brain_dataset = ExcelDataset(data_path)
+    print(brain_dataset[0])
     f = brain_dataset.features
     t = brain_dataset.target
     # print(all(t[0].size))
-
+    print(f[0])
+    print(np.linalg.eigvals(f[0]))
     print(f[10].dim())
     print(type(t[10]))
-    print(brain_dataset[5])
+    print(brain_dataset)
 
-    a = F_tc(0.1)
-    b = a.t() @ a
-    print(a.t().inverse())
+    F = F_tc(0.9)
+    C = F.t() @ F
+    print(C)
+    print(np.linalg.eigvals(C))
+
+    # print(a.t().inverse())
     # print(a.dim())
     # print(b)
     # print(b.dim())
 
+"""
+TODO:
+1) реализовать метод __str__ в зависимости от предоставлемых данных
 
+"""
