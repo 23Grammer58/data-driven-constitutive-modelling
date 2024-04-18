@@ -142,7 +142,7 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
             #     # print("l2 reg = ", l2_reg)
             #
 
-            l2_reg = model.calc_l2()
+            l2_reg = model.calc_regularization()
             # # Добавляем L2 регуляризацию к функции потерь
             if l2_reg is not None:
                 loss = loss + l2_reg_coeff * l2_reg
