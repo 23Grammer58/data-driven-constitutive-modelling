@@ -136,7 +136,7 @@ class ExcelDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        lam = torch.tensor(self.data.iloc[idx, 0], dtype=torch.float32, device=self.device)
+        # lam = torch.tensor(self.data.iloc[idx, 0], dtype=torch.float32, device=self.device)
         F = torch.tensor(self.data.iloc[idx, 1], dtype=torch.float32, device=self.device)
         features = torch.tensor(self.data.iloc[idx, 2], dtype=torch.float32, device=self.device)
         target = torch.tensor(self.data.iloc[idx, 3], dtype=torch.float32, device=self.device)
@@ -144,7 +144,7 @@ class ExcelDataset(Dataset):
         if self.transform:
             features, target = self.transform(features, target)
 
-        return lam, F, features, target
+        return F, features, target
 
 
     # def __str__(self, ):
@@ -209,20 +209,20 @@ if __name__ == "__main__":
     data_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
     brain_dataset = ExcelDataset(data_path)
-    print(brain_dataset.data[:30])
+    data = brain_dataset.data
+    print(data.iloc[:, 0])
+    lam, F, features, target = data
+    print(lam)
+
     f = brain_dataset.features
     t = brain_dataset.target
-    # print(all(t[0].size))
-    print(f[0])
-    print(np.linalg.eigvals(f[0]))
-    print(f[10].dim())
-    print(type(t[10]))
+
     print(brain_dataset)
 
-    F = F_tc(0.9)
-    C = F.t() @ F
-    print(C)
-    print(np.linalg.eigvals(C))
+    # F = F_tc(0.9)
+    # C = F.t() @ F
+    # print(C)
+    # print(np.linalg.eigvals(C))
 
     # print(a.t().inverse())
     # print(a.dim())

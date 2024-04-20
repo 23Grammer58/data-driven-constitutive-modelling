@@ -112,10 +112,10 @@ def train(train_loader, test_loader, experiment_name, plot_loss=False):
         last_data = len(train_loader)
         for i, data in enumerate(train_loader):
 
-            lam, C, invariants, targets = data
+            F, invariants, targets = data
 
-            C = C.reshape(-1, 3)
-            inputs = (lam, C, invariants)
+            F = F.reshape(-1, 3)
+            inputs = (F, invariants)
             targets = targets.reshape(-1, 3)
 
             # inputs, targets = inputs.to(device), targets.to(device)
