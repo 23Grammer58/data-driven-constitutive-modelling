@@ -112,7 +112,7 @@ class ExcelDataset(Dataset):
             self.invariants = self.data["invariants"]
             self.lam = self.data["lambda"]
             self.target = self.data["P"]
-            self.features = self.data["C"]
+            self.features = self.data["F"]
             # self.features = torch.(self.features.values)
             # for value in self.F.values:
             #     value = torch.from_numpy(value)
@@ -137,14 +137,14 @@ class ExcelDataset(Dataset):
     def __getitem__(self, idx):
 
         lam = torch.tensor(self.data.iloc[idx, 0], dtype=torch.float32, device=self.device)
-        C = torch.tensor(self.data.iloc[idx, 1], dtype=torch.float32, device=self.device)
+        F = torch.tensor(self.data.iloc[idx, 1], dtype=torch.float32, device=self.device)
         features = torch.tensor(self.data.iloc[idx, 2], dtype=torch.float32, device=self.device)
         target = torch.tensor(self.data.iloc[idx, 3], dtype=torch.float32, device=self.device)
 
         if self.transform:
             features, target = self.transform(features, target)
 
-        return lam, C, features, target
+        return lam, F, features, target
 
 
     # def __str__(self, ):
@@ -192,16 +192,16 @@ class ExcelDataset(Dataset):
         I1 = pd.concat([brain_CR_TC_data['I1'], brain_CR_S_data['I1']], ignore_index=True)
         I2 = pd.concat([brain_CR_TC_data['I2'], brain_CR_S_data['I2']], ignore_index=True)
         F = pd.concat([brain_CR_TC_data['F'], brain_CR_S_data['F']], ignore_index=True)
-        C = F.apply(lambda x: x.t().matmul(x))
+        # C = F.apply(lambda x: x.t().matmul(x))
 
         invariants = pd.Series(zip(torch.tensor(I1, dtype=dataset_type, device=self.device),
                                    torch.tensor(I2, dtype=dataset_type, device=self.device)))
         invariants.name = "invariants"
 
         true_stress = pd.concat([brain_CR_TC_data["P"], brain_CR_S_data["P"]], ignore_index=True, axis=0)
-        data = pd.concat((lam, C, invariants, true_stress), axis=1)
-        data = data.rename(columns={0: 'lambda', 'F': 'C'})
-        print(data.iloc[1])
+        data = pd.concat((lam, F, invariants, true_stress), axis=1)
+        data = data.rename(columns={0: 'lambda'})
+        # print(data.iloc[1])
         return data
 
 
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     data_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
     brain_dataset = ExcelDataset(data_path)
-    print(brain_dataset[0])
+    print(brain_dataset.data[:30])
     f = brain_dataset.features
     t = brain_dataset.target
     # print(all(t[0].size))
