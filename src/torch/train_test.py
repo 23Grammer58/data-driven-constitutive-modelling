@@ -27,11 +27,11 @@ else:
 device = "cpu"
 
 # Гиперпараметры
-input_size = 2  # Размерность входных данных
-output_size = 1  # Размерность выходных данных
-hidden_size = 270  # Новое количество нейронов на слое
-learning_rate = 0.01
-EPOCHS = 1
+# input_size = 2  # Размерность входных данных
+# output_size = 1  # Размерность выходных данных
+# hidden_size = 270  # Новое количество нейронов на слое
+learning_rate = 0.0001
+EPOCHS = 5
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 
@@ -111,7 +111,12 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
         last_data = len(train_loader)
         for i, data in enumerate(train_loader):
 
+
             F, invariants, targets = data
+            # i1, i2 = invariants.squeeze().squeeze()
+            # invariants = (i1.requires_grad_(True), i2.requires_grad_(True))
+            # if len(invariants) != 2:
+            #     print(invariants)
 
             F = F.reshape(-1, 3)
             inputs = (F, invariants)
@@ -200,8 +205,8 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
                 targets_P12.append(vtargets[0, 1])
 
                 voutputs = model(vinputs).to(device)
-                predictions_P11.append(voutputs[0, 0])
-                predictions_P12.append(voutputs[0, 1])
+                # predictions_P11.append(voutputs[0, 0])
+                # predictions_P12.append(voutputs[0, 1])
                 vloss = loss_fn(voutputs, vtargets)
                 running_vloss += vloss
                 vlosses.append(vloss)
@@ -313,8 +318,8 @@ def jit(model, experiment_name, x=None):
 
 if __name__ == "__main__":
     torch.manual_seed(42)
-
-    experiment = "CNN_brain_6term_C_cuda/"
+    experiment = None
+    # experiment = "CNN_brain_6term_C_cuda/"
     # experiment = None
     # print("loading data...")
     #
