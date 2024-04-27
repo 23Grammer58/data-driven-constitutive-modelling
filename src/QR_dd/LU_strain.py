@@ -7,8 +7,20 @@ start_iteration = 1
 iterations = 60
 points = 49
 
+
 # Цикл по всем итерациям
 def read_matrix_from_file(file_path):
+    """
+        Читает матрицу из файла и возвращает ее в виде массива numpy.
+
+        Аргументы:
+        - file_path (str): Путь к файлу.
+
+        Возвращает:
+        - numpy.ndarray: Матрица, прочитанная из файла.
+
+        """
+
     with open(file_path, 'r') as file:
         lines = file.readlines()
         matrix_flat = [float(value) for line in lines for value in line.strip().split()]
@@ -17,11 +29,34 @@ def read_matrix_from_file(file_path):
 
 # Функция для создания матрицы 2x2 из производных
 def create_2x2_matrix(dudx, dudy, dvdx, dvdy):
+    """
+    Создает матрицу 2x2 из четырех входных значений.
+
+    Аргументы:
+    - dudx (float): Значение производной dudx.
+    - dudy (float): Значение производной dudy.
+    - dvdx (float): Значение производной dvdx.
+    - dvdy (float): Значение производной dvdy.
+
+    Возвращает:
+    - numpy.ndarray: Матрица 2x2.
+
+    """
     return np.array([[dudx, dudy], [dvdx, dvdy]])
 
 
 # Главная функция для обработки файлов
 def process_files(directory):
+    """
+    Обрабатывает файлы в указанной директории и возвращает массив тензоров.
+
+    Аргументы:
+    - directory (str): Путь к директории с файлами.
+
+    Возвращает:
+    - numpy.ndarray: Массив тензоров.
+
+    """
     result_array = np.zeros((31, 50, 2, 2))
 
     for iteration in range(1, 30):  # 30 итераций
@@ -49,11 +84,30 @@ def process_files(directory):
 
 
 def cauchy_green(F):
+    """
+    Вычисляет тензор Cauchy-Green на основе матрицы деформации F.
+
+    Аргументы:
+    - F (numpy.ndarray): Матрица деформации.
+
+    Возвращает:
+    - numpy.ndarray: Тензор Cauchy-Green.
+
+    """
     C = F.transpose() @ F
     return np.array(C)
 
 
 def upper_triangle(C):
+    """
+    Преобразует тензор C в верхнетреугольную матрицу.
+
+    Аргументы: - C (numpy.ndarray): Тензор Cauchy-Green.
+
+    Возвращает:
+    - numpy.ndarray: Верхнетреугольная матрица.
+
+    """
     F = np.zeros((2, 2))
     F[0, 0] = np.sqrt(C[0, 0])
     F[0, 1] = C[0, 1] / F[0, 0]
@@ -62,6 +116,16 @@ def upper_triangle(C):
 
 
 def xie(F):
+    """
+    Вычисляет вектор xie на основе матрицы F.
+
+    Аргументы:
+    - F (numpy.ndarray): Матрица F.
+
+    Возвращает:
+    - numpy.ndarray: Вектор xie.
+
+    """
     x = np.zeros(3)
     x[0] = np.log(F[0, 0])
     x[1] = np.log(F[1, 1])
@@ -70,6 +134,15 @@ def xie(F):
 
 
 def plot2d(x, y, z):
+    """
+    Строит 2D график.
+
+    Аргументы:
+    - x (numpy.ndarray): Координата x.
+    - y (numpy.ndarray): Координата y.
+    - z (numpy.ndarray): Координата z.
+
+    """
     # plt.style.use('_mpl-gallery')
 
     # size and color:
@@ -111,7 +184,16 @@ def plot2d(x, y, z):
 
 
 def plot3d(x, y, z, title = ""):
+    """
+    Строит 3D график.
 
+    Аргументы:
+    - x (numpy.ndarray): Координата x.
+    - y (numpy.ndarray): Координата y.
+    - z (numpy.ndarray): Координата z.
+    - title (str): Заголовок графика.
+
+    """
     # plot
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
@@ -138,7 +220,18 @@ def plot3d(x, y, z, title = ""):
 
 
 def plot3d_double(x1, y1, z1, x2, y2, z2):
+    """
+    Строит два 3D графика на одном рисунке.
 
+    Аргументы:
+    - x1 (numpy.ndarray): Координата x первого графика.
+    - y1 (numpy.ndarray): Координата y первого графика.
+    - z1 (numpy.ndarray): Координата z первого графика.
+    - x2 (numpy.ndarray): Координата x второго графика.
+    - y2 (numpy.ndarray): Координата y второго графика.
+    - z2 (numpy.ndarray): Координата z второго графика.
+
+    """
     # plot
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(projection='3d')
@@ -159,8 +252,22 @@ def plot3d_double(x1, y1, z1, x2, y2, z2):
 
     plt.show()
 
-def gen_tensors(exp_path):
 
+def gen_tensors(exp_path, save_npy_to_scv=False):
+    """
+    Генерирует тензора:
+    градиенты деформаций, деформаций Коши-Грина
+    и рассчитывает меры Лапласа (xi)_i i in [1, 3]
+    на основе указанного пути к эксперименту.
+
+    Аргументы:
+    - exp_path (str): Путь к папке с экспериментом.
+    - save_npy_to_scv (bool): Флаг, указывающий, нужно ли сохранить тензоры в формате .csv. По умолчанию False.
+
+    Возвращает:
+    - xies (numpy.ndarray): Массив тензоров xies.
+
+    """
     folder_path = os.path.join('experiments', exp_path)
 
     Fs = process_files(folder_path)
@@ -173,44 +280,54 @@ def gen_tensors(exp_path):
             Cs[t][point] = cauchy_green(Fs[t][point])
             F2s[t][point] = upper_triangle(Cs[t][point])
             xies[t][point] = xie(F2s[t][point])
+
+    if save_npy_to_scv:
+        np.save('Cauchy_greens.npy', Cs)
+        np.save('deformation_gradients.npy', Fs)
+        np.save('xis.npy', xies)
     return xies
+
 
 if __name__ == "__main__":
     experiment_name1 = "VHBEquiBiaxial"
     experiment_name = "shear_free"
 
-    xies = gen_tensors(experiment_name)
-    xies1 = gen_tensors(experiment_name1)
+    xies_shear = gen_tensors(experiment_name, True)
+    xies_biaxial = gen_tensors(experiment_name1, True)
     # print(Fs[-1])
     # print("Cs:\n", Cs[-1])
     # print("F2s:\n",F2s[-1])
     # print("ksi:\n",xies[-1])
 
-    xie1 = xies[:, :, 0]
-    xie2 = xies[:, :, 1]
-    xie3 = xies[:, :, 2]
-    xie_norm = (xie1 + xie2) / np.sqrt(2)
+    xie_shear_1 = xies_shear[:, :, 0]
+    xie_shear_2 = xies_shear[:, :, 1]
+    xie_shear_3 = xies_shear[:, :, 2]
 
-    xie1_1 = xies1[:, :, 0]
-    xie2_1 = xies1[:, :, 1]
-    xie3_1 = xies1[:, :, 2]
+    xie_shear_norm_12 = (xie_shear_1 + xie_shear_2) / np.sqrt(2)
+    xie_shear_norm_23 = (xie_shear_2 + xie_shear_3) / np.sqrt(2)
+    xie_shear_norm_13 = (xie_shear_1 + xie_shear_3) / np.sqrt(2)
+    xie_shear_norm = np.array([xie_shear_norm_12, xie_shear_norm_23, xie_shear_norm_13])
 
-    # plot2d(xie2, xie3, xie_norm)
-    # plot3d(xie1, xie3, xie2, experiment_name)
-    plot3d_double(xie1, xie3, xie2, xie1_1, xie3_1, xie2_1)
-    # print(xie3[2])
-    # plt.plot(range(1, 31), xie3)
+    xie_biaxial_1 = xies_biaxial[:, :, 0]
+    xie_biaxial_2 = xies_biaxial[:, :, 1]
+    xie_biaxial_3 = xies_biaxial[:, :, 2]
+
+    # plot2d(xie_shear_1, xie_shear_2, xie_shear_3, xie_norm)
+    # plot3d(xie_shear_1, xie_shear_3, xie_shear_2, experiment_name)
+    plot3d_double(xie_shear_1, xie_shear_3, xie_shear_2, xie_biaxial_1, xie_biaxial_3, xie_biaxial_2)
+    # print(xie_shear_3[2])
+    # plt.plot(range(1, 31), xie_shear_3)
     # plt.show()
     # print(xie1)
-    # print(xie3)
-    # xie1_flat = xie1.flatten()
-    # xie2_flat = xie2.flatten()
+    # print(xie_shear_3)
+    # xie_shear_1_flat = xie_shear_1.flatten()
+    # xie_shear_2_flat = xie_shear_2.flatten()
     # xie_norm_flat = xie_norm.flatten()
-    # # print(xie1_flat.shape)
-    # print("Дисперсия первого графика =", np.var(np.column_stack([xie2_flat, xie1_flat])))
-    # print("Дисперсия второго графика =", np.var(np.column_stack([xie2_flat, xie_norm_flat])))
-    # print(np.var(np.concatenate(xie1.flat, xie3.flat)))
-    # plot((xie1 + xie2)/np.sqrt(2), xie3)
+    # # print(xie_shear_1_flat.shape)
+    # print("Дисперсия первого графика =", np.var(np.column_stack([xie_shear_2_flat, xie_shear_1_flat])))
+    # print("Дисперсия второго графика =", np.var(np.column_stack([xie_shear_2_flat, xie_norm_flat])))
+    # print(np.var(np.concatenate(xie_shear_1.flat, xie_shear_3.flat)))
+    # plot((xie_shear_1 + xie_shear_2)/np.sqrt(2), xie_shear_3)
     # print(tensor_gradient.shape)
     # print(tensor_gradient[29, 0])
     # print(Cs[5])
