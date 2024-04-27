@@ -14,7 +14,7 @@ import numpy as np
 import sympy as sp
 from tqdm import tqdm
 
-
+import random
 # print(torch.cuda.device_count())
 # print(torch.cuda.current_device())
 # print(torch.cuda.get_device_name(0))
@@ -30,8 +30,8 @@ device = "cpu"
 # input_size = 2  # Размерность входных данных
 # output_size = 1  # Размерность выходных данных
 # hidden_size = 270  # Новое количество нейронов на слое
-learning_rate = 0.0001
-EPOCHS = 5
+learning_rate = 0.1
+EPOCHS = 50
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 
@@ -100,9 +100,10 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
         else:
             print(f"Директория {path_to_save_weights} уже существует")
 
+    random_data = [[torch.tensor(random.random()) + 3, torch.tensor(random.random()) + 3] for _ in range(70)]
+    random_targets = [torch.tensor(random.random()) + 3 for _ in range(70)]
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-
     def train_one_epoch(epoch_index, tb_writer, l2_reg_coeff=0.1, l1_reg_coeff = 0.1):
 
         running_loss = 0.
@@ -110,17 +111,21 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
 
         last_data = len(train_loader)
         for i, data in enumerate(train_loader):
-
-
             F, invariants, targets = data
+
+            random.seed(10 + i)
+            i1 = torch.tensor(random.random(), requires_grad=True) + 3
+            i2 = torch.tensor(random.random(), requires_grad=True) + 3
+            targets =  random_targets[i]
+            invariants = random_data[i]
             # i1, i2 = invariants.squeeze().squeeze()
             # invariants = (i1.requires_grad_(True), i2.requires_grad_(True))
             # if len(invariants) != 2:
             #     print(invariants)
 
             F = F.reshape(-1, 3)
-            inputs = (F, invariants)
-            targets = targets.reshape(-1, 3)
+            inputs = [F, invariants]
+            # targets = targets.reshape(-1, 3)
 
             # inputs, targets = inputs.to(device), targets.to(device)
             # if inputs.shape != (batch_size, 2):
@@ -130,7 +135,7 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
             optimizer.zero_grad()
             # i1_inputs=inputs[:, :1]
             # i2_inputs = inputs[:, 1:]
-            stress_model = model(inputs)
+            stress_model = model(F, invariants)
 
             loss = loss_fn(stress_model, targets)
 
@@ -167,8 +172,8 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
             #     tb_x = epoch_index * len(train_loader) + i + 1
             #     tb_writer.add_scalar('Loss/train', last_loss, tb_x)
             #     running_loss = 0.
-            # if i == (last_data-1):
-            #     print(last_data)
+            if i == (last_data-1):
+                print(random_data[last_data])
         return running_loss / last_data
 
     epoch_number = 0
@@ -204,7 +209,7 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
                 targets_P11.append(vtargets[0, 0])
                 targets_P12.append(vtargets[0, 1])
 
-                voutputs = model(vinputs).to(device)
+                voutputs = model(F, invariants).to(device)
                 # predictions_P11.append(voutputs[0, 0])
                 # predictions_P12.append(voutputs[0, 1])
                 vloss = loss_fn(voutputs, vtargets)
@@ -223,15 +228,16 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
         # writer.flush()
         #
         # # Track best performance, and save the model's state
-        model_path = '{}_{}'.format(timestamp, epoch_number)
-        path_to_save_weights = os.path.join("pretrained_models", experiment_name)
-        path_to_save_weights = os.path.join(path_to_save_weights, model_path + ".pth")
+        if experiment_name:
+            model_path = '{}_{}'.format(timestamp, epoch_number)
+            path_to_save_weights = os.path.join("pretrained_models", experiment_name)
+            path_to_save_weights = os.path.join(path_to_save_weights, model_path + ".pth")
 
-        if avg_loss < best_vloss or epoch % 10 == 0:
-            best_vloss = avg_loss
-            print(f"Saved PyTorch Model State to {path_to_save_weights}")
-            torch.save(model.state_dict(), model_path)
-            print(model.get_potential())
+            if avg_loss < best_vloss or epoch % 10 == 0:
+                best_vloss = avg_loss
+                print(f"Saved PyTorch Model State to {path_to_save_weights}")
+                torch.save(model.state_dict(), model_path)
+                print(model.get_potential())
 
         # elif epoch % 10 == 0:
         #     torch.save(model.state_dict(), path_to_save_weights)
