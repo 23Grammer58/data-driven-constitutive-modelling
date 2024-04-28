@@ -326,7 +326,7 @@ if __name__ == "__main__":
     # train_dataloader, test_dataloader = load_data(
     #     "full_data_names.txt",
     #     batch_size=1)
-    data_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
+    data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
     # train_dataloader= load_data(
     #     "one_data_names.txt", batch_size=1)

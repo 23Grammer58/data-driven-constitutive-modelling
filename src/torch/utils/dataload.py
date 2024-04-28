@@ -206,13 +206,13 @@ class ExcelDataset(Dataset):
 
 
 if __name__ == "__main__":
-    data_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
+    data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
-    brain_dataset = ExcelDataset(data_path)
+    brain_dataset = ExcelDataset(data_path, device="cpu")
     data = brain_dataset.data
     print(data.iloc[:, 0])
     lam, F, features, target = data
-    print(lam)
+    print(type(lam))
 
     f = brain_dataset.features
     t = brain_dataset.target

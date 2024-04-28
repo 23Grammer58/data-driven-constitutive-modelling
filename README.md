@@ -1,8 +1,7 @@
 # data-driven-constitutive-modelling
 
-Project Name
-Overview
-This repository contains code for constructing neural correlations to solve a specific problem. The data required for this task is organized in the data folder with the following structure:
+Проект направлен на решениее задач на получение моделей .
+The data required for this task is organized in the data folder with the following structure:
 
 kotlin
 Copy code
