@@ -318,7 +318,7 @@ def jit(model, experiment_name, x=None):
 
 if __name__ == "__main__":
     torch.manual_seed(42)
-    experiment = None
+    experiment = "test"
     # experiment = "CNN_brain_6term_C_cuda/"
     # experiment = None
     # print("loading data...")
