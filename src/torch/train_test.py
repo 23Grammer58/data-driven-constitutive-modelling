@@ -31,7 +31,7 @@ device = "cpu"
 # output_size = 1  # Размерность выходных данных
 # hidden_size = 270  # Новое количество нейронов на слое
 learning_rate = 0.1
-EPOCHS = 50
+EPOCHS = 10
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 
@@ -42,7 +42,7 @@ def normalize_data(data):
     return (data - mean) / std
 
 
-def  load_data(path_to_exp_names, batch_size, transform=normalize_data, device=device, shuffle=True, length_start=None, length_end=None):
+def load_data(path_to_exp_names, batch_size, transform=normalize_data, device=device, shuffle=True, length_start=None, length_end=None):
     dataset = ExcelDataset(path=path_to_exp_names, transform=transform, device=device)
     if length_end is not None:
         dataset.data = dataset.data[length_start:length_end]
@@ -100,7 +100,7 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
         else:
             print(f"Директория {path_to_save_weights} уже существует")
 
-    random_data = [[torch.tensor(random.random()) + 3, torch.tensor(random.random()) + 3] for _ in range(70)]
+    random_data = [(torch.tensor(random.random()) + 3, torch.tensor(random.random()) + 3 for _ in range(70)]
     random_targets = [torch.tensor(random.random()) + 3 for _ in range(70)]
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -332,7 +332,7 @@ if __name__ == "__main__":
     # train_dataloader, test_dataloader = load_data(
     #     "full_data_names.txt",
     #     batch_size=1)
-    data_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
+    data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
     # train_dataloader= load_data(
     #     "one_data_names.txt", batch_size=1)

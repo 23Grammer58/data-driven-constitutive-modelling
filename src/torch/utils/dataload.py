@@ -107,6 +107,7 @@ class ExcelDataset(Dataset):
             self.target = torch.tensor(self.data.apply(
                 lambda row: psi(row['I1'], row['I2']), axis=1).values, dtype=torch.float32).unsqueeze(-1)
         else:
+            self.path = path
             self.data = self.full_field_data(path)
             # self.features, self.target, self.F = self.full_field_data(path)
             self.invariants = self.data["invariants"]
@@ -166,6 +167,7 @@ class ExcelDataset(Dataset):
 
     def full_field_data(self, path):
         all_data = pd.read_excel(path, sheet_name="Sheet1", header=[1, 2, 3])
+
         brain_CR_TC_data = all_data.filter(like="CR-comten").copy()
         brain_CR_S_data = all_data.filter(like="CR-shr").copy().dropna(axis=1)
 
@@ -204,20 +206,60 @@ class ExcelDataset(Dataset):
         # print(data.iloc[1])
         return data
 
+    def new_full_field(self, Region):
+        dfs = pd.read_excel(self.path, sheet_name='Sheet1')
+
+        if Region == 'CX':
+            P_ut = dfs.iloc[3:, 1].astype(np.float64)
+            lam_ut = dfs.iloc[3:, 0].astype(np.float64)
+
+            P_ss = dfs.iloc[3:, 3].astype(np.float64).values
+            gamma_ss = dfs.iloc[3:, 2].astype(np.float64).values
+        elif Region == 'CR':
+            P_ut = dfs.iloc[3:, 6].astype(np.float64)
+            lam_ut = dfs.iloc[3:, 5].astype(np.float64)
+
+            P_ss = dfs.iloc[3:, 8].astype(np.float64)
+            gamma_ss = dfs.iloc[3:, 7].astype(np.float64)
+        elif Region == 'BG':
+            P_ut = dfs.iloc[3:, 11].astype(np.float64)
+            lam_ut = dfs.iloc[3:, 10].astype(np.float64)
+
+            P_ss = dfs.iloc[3:, 13].astype(np.float64).values
+            gamma_ss = dfs.iloc[3:, 12].astype(np.float64).values
+        elif Region == 'CC':
+            P_ut = dfs.iloc[3:, 16].astype(np.float64)
+            lam_ut = dfs.iloc[3:, 15].astype(np.float64)
+
+            P_ss = dfs.iloc[3:, 18].astype(np.float64).values
+            gamma_ss = dfs.iloc[3:, 17].astype(np.float64).values
+
+        P_ut_all = P_ut
+        lam_ut_all = lam_ut
+
+        return P_ut_all, lam_ut_all, P_ut, lam_ut, P_ss, gamma_ss
+
 
 if __name__ == "__main__":
-    data_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
+    data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
-    brain_dataset = ExcelDataset(data_path)
-    data = brain_dataset.data
-    print(data.iloc[:, 0])
-    lam, F, features, target = data
-    print(lam)
+    brain_dataset = ExcelDataset(data_path, device="cpu")
 
-    f = brain_dataset.features
-    t = brain_dataset.target
+    data = brain_dataset.new_full_field("CR")
+    P_ut_all, lam_ut_all, P_ut, lam_ut, P_ss, gamma_ss = data
+    # print(data)
+    # print(P_ut_all == P_ut)
+    # print(lam_ut_all == lam_ut)
+    print(pd.concat((lam_ut, gamma_ss), ignore_index=True))
+    # data = brain_dataset.data
+    # print(data.iloc[:, 0])
+    # lam, F, features, target = data
+    # print(lam)
 
-    print(brain_dataset)
+    # f = brain_dataset.features
+    # t = brain_dataset.target
+
+    # print(brain_dataset)
 
     # F = F_tc(0.9)
     # C = F.t() @ F
