@@ -100,7 +100,7 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
         else:
             print(f"Директория {path_to_save_weights} уже существует")
 
-    random_data = [(torch.tensor(random.random()) + 3, torch.tensor(random.random()) + 3 for _ in range(70)]
+    random_data = [[torch.tensor(random.random() + 3), torch.tensor(random.random() + 3)] for _ in range(70)]
     random_targets = [torch.tensor(random.random()) + 3 for _ in range(70)]
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
