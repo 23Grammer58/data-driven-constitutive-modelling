@@ -50,6 +50,7 @@ class Trainer:
         self.plot_valid = plot_valid
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.writer = SummaryWriter('runs/fashion_trainer_{}'.format(self.timestamp))
+        self.path_to_save_weights = os.path.join("pretrained_models", self.experiment_name)
 
     def load_data(self,
                   path_to_exp_names,
@@ -157,20 +158,23 @@ class Trainer:
             avg_vloss = running_vloss / 66
             print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
-            model_path = '{}_{}'.format(self.timestamp, epoch_number)
-            path_to_save_weights = os.path.join("pretrained_models", self.experiment_name)
-            path_to_save_weights = os.path.join(path_to_save_weights, model_path + ".pth")
 
-            if avg_loss < best_vloss or epoch % 10 == 0:
+            if avg_loss < best_vloss:
                 best_vloss = avg_loss
+                model_path = '{}_{}'.format(self.timestamp, epoch_number)
+                path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
                 print(f"Saved PyTorch Model State to {path_to_save_weights}")
-                torch.save(self.model.state_dict(), model_path)
+                torch.save(self.model.state_dict(), path_to_save_weights)
                 print(self.model.get_potential())
-
+            elif epoch % (self.epochs // 10) == 0:
+                print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
+                model_path = '{}_{}'.format(self.timestamp, epoch_number)
+                path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
+                print(f"Saved PyTorch Model State to {path_to_save_weights}")
+                torch.save(self.model.state_dict(), path_to_save_weights)
+                print(self.model.get_potential())
             elosses.append(avg_loss)
             epoch_number += 1
-            if (epoch + 1) % 10 == 0:
-                print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
 
         plt.plot(elosses)
         plt.xlabel('Epoch')
