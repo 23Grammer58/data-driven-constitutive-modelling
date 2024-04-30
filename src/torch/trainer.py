@@ -60,6 +60,7 @@ class Trainer:
                   length_end=None):
 
         dataset = ExcelDataset(path=path_to_exp_names, transform=transform, device=self.device)
+        dataset.to_tensor()
         if length_end is not None:
             dataset.data = dataset.data[length_start:length_end]
 
@@ -88,18 +89,17 @@ class Trainer:
 
             last_data = len(train_loader)
             for i, data in enumerate(train_loader):
-                F, invariants, targets, exp_type = data
-                F = F.reshape(-1, 3)
-                inputs = (F, invariants, exp_type)
-                targets = targets.reshape(-1, 3)
+                features, target = data
+
+                # inputs = (F, i1, i2, exp_type)
 
                 optimizer.zero_grad()
-                stress_model = self.model(inputs)
+                stress_model = self.model(features)
 
-                loss = loss_fn(stress_model, targets)
+                loss = loss_fn(stress_model, target)
 
                 l1_reg = self.model.calc_l1()
-                l2_reg = self.model.calc_regularization()
+                l2_reg = self.model.calc_regularization(2)
                 if l2_reg is not None:
                     loss = loss + l2_reg_coeff * l2_reg + l1_reg_coeff * l1_reg
 
@@ -111,16 +111,18 @@ class Trainer:
                 last_loss = loss.item()
                 running_loss += loss.item()
 
-            return running_loss / last_data
+            return running_loss
 
         epoch_number = 0
         best_vloss = torch.inf
         elosses = []
         vlosses = []
-        predictions_P11 = []
-        predictions_P12 = []
-        targets_P11 = []
-        targets_P12 = []
+        vpredictions = []
+        vtargets = []
+        # predictions_P11 = []
+        # predictions_P12 = []
+        # targets_P11 = []
+        # targets_P12 = []
 
         # Training the model
         for epoch in tqdm(range(self.epochs)):
@@ -130,23 +132,29 @@ class Trainer:
             running_vloss = 0.0
             self.model.eval()
 
-            with torch.no_grad():
-                for i, vdata in enumerate(test_loader):
-                    F, invariants, target, exp_type = vdata
-                    F = F.reshape(-1, 3)
-                    vinputs = (F, invariants)
-                    vtargets = target.reshape(-1, 3)
-                    targets_P11.append(vtargets[0, 0])
-                    targets_P12.append(vtargets[0, 1])
+            validation =False
+            if validation:
+                with torch.no_grad():
+                    for i, vdata in enumerate(test_loader):
+                        vfeatures, vtarget = vdata
 
-                    voutputs = self.model(vinputs).to(self.device)
-                    predictions_P11.append(voutputs[0, 0])
-                    predictions_P12.append(voutputs[0, 1])
-                    vloss = loss_fn(voutputs, vtargets)
-                    running_vloss += vloss
-                    vlosses.append(vloss)
+                        optimizer.zero_grad()
+                        # stress_model = self.model(vfeatures)
+                        vstress = self.model(vfeatures)
+                        vloss = loss_fn(vtarget, vstress)
+                        running_vloss += vloss
 
-            avg_vloss = running_vloss / (i + 1)
+                        # targets_P11.append(vtarget[0, 0])
+                        # targets_P12.append(vtarget[0, 1])
+                        # predictions_P11.append(vstress[0, 0])
+                        # predictions_P12.append(vstress[0, 1])
+
+                        vlosses.append(vloss)
+                        vpredictions.append(vstress)
+                        vtargets.append(vtarget)
+            else:
+                running_vloss = avg_loss
+            avg_vloss = running_vloss / 66
             print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
             model_path = '{}_{}'.format(self.timestamp, epoch_number)
