@@ -63,6 +63,8 @@ class Trainer:
         if length_end is not None:
             dataset.data = dataset.data[length_start:length_end]
 
+
+
         dataset_loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=1, pin_memory=False)
         return dataset_loader
 
@@ -86,9 +88,9 @@ class Trainer:
 
             last_data = len(train_loader)
             for i, data in enumerate(train_loader):
-                F, invariants, targets = data
+                F, invariants, targets, exp_type = data
                 F = F.reshape(-1, 3)
-                inputs = (F, invariants)
+                inputs = (F, invariants, exp_type)
                 targets = targets.reshape(-1, 3)
 
                 optimizer.zero_grad()
@@ -130,7 +132,7 @@ class Trainer:
 
             with torch.no_grad():
                 for i, vdata in enumerate(test_loader):
-                    F, invariants, target = vdata
+                    F, invariants, target, exp_type = vdata
                     F = F.reshape(-1, 3)
                     vinputs = (F, invariants)
                     vtargets = target.reshape(-1, 3)

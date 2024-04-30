@@ -107,12 +107,15 @@ class ExcelDataset(Dataset):
             self.target = torch.tensor(self.data.apply(
                 lambda row: psi(row['I1'], row['I2']), axis=1).values, dtype=torch.float32).unsqueeze(-1)
         else:
+            self.path = path
             self.data = self.full_field_data(path)
+            # self.features = [*self.data]
+            # self.target = [*self.data]
             # self.features, self.target, self.F = self.full_field_data(path)
-            self.invariants = self.data["invariants"]
-            self.lam = self.data["lambda"]
-            self.target = self.data["P"]
-            self.features = self.data["F"]
+            # self.invariants = self.data["invariants"]
+            # self.lam = self.data["lambda"]
+            # self.target = self.data["P"]
+            # self.features = self.data["F"]
             # self.features = torch.(self.features.values)
             # for value in self.F.values:
             #     value = torch.from_numpy(value)
@@ -126,25 +129,27 @@ class ExcelDataset(Dataset):
             # self.invariants = None
 
         # Normalize the features and target
-        if transform is not None:
-            self.features = transform(self.features)
-            self.target = transform(self.target)
-        self.transform = transform
+        # if transform is not None:
+        #     self.features = transform(self.features)
+        #     self.target = transform(self.target)
+        # self.transform = transform
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
 
-        # lam = torch.tensor(self.data.iloc[idx, 0], dtype=torch.float32, device=self.device)
-        F = torch.tensor(self.data.iloc[idx, 1], dtype=torch.float32, device=self.device)
-        features = torch.tensor(self.data.iloc[idx, 2], dtype=torch.float32, device=self.device)
-        target = torch.tensor(self.data.iloc[idx, 3], dtype=torch.float32, device=self.device)
+        # # lam = torch.tensor(self.data.iloc[idx, 0], dtype=torch.float32, device=self.device)
+        # F = torch.tensor(self.data.iloc[idx, 1], dtype=torch.float32, device=self.device)
+        # features = torch.tensor(self.data.iloc[idx, 2], dtype=torch.float32, device=self.device)
+        # target = torch.tensor(self.data.iloc[idx, 3], dtype=torch.float32, device=self.device)
+        # markers = torch.tensor(self.data.iloc[idx, 4], dtype=torch.float32, device=self.device)
+        # features = [*self.data.iloc[idx]][2:3]
+        # target = [*self.data.iloc[idx]][1]
+        # if self.transform:
+        #     features, target = self.transform(features, target)
 
-        if self.transform:
-            features, target = self.transform(features, target)
-
-        return F, features, target
+        return [*self.data.iloc[idx]]
 
 
     # def __str__(self, ):
@@ -167,40 +172,62 @@ class ExcelDataset(Dataset):
     def full_field_data(self, path):
         all_data = pd.read_excel(path, sheet_name="Sheet1", header=[1, 2, 3])
         brain_CR_TC_data = all_data.filter(like="CR-comten").copy()
-        brain_CR_S_data = all_data.filter(like="CR-shr").copy().dropna(axis=1)
+        brain_CR_S_data  = all_data.filter(like="CR-shr").copy().dropna(axis=1)
 
         brain_CR_TC_data.columns = brain_CR_TC_data.columns.droplevel(level=[0, 2])
-        brain_CR_S_data.columns = brain_CR_S_data.columns.droplevel(level=[0, 2])
+        brain_CR_S_data.columns  = brain_CR_S_data.columns.droplevel(level=[0, 2])
         
-        # calculate 1 stress tensor PK
-        brain_CR_TC_data["P"] = brain_CR_TC_data["P"].apply(number_to_matrix11)
-        brain_CR_S_data["P"] = brain_CR_S_data["P"].apply(number_to_matrix12)
+        # # calculate 1 stress tensor PK
+        # brain_CR_TC_data["P"] = brain_CR_TC_data["P"].apply(number_to_matrix11)
+        # brain_CR_S_data["P"]  = brain_CR_S_data["P"].apply(number_to_matrix12)
 
-        # calculate I1, I2, F from lambda (torsion&compression) 
-        lambdas = brain_CR_TC_data.columns[0]
-        brain_CR_TC_data['I1'] = brain_CR_TC_data[lambdas].apply(I1_tc)
-        brain_CR_TC_data['I2'] = brain_CR_TC_data[lambdas].apply(I2_tc)
-        brain_CR_TC_data['F'] = brain_CR_TC_data[lambdas].apply(F_tc)
 
-        # calculate I1, I2, F from gamma (shear)
-        gammas = brain_CR_S_data.columns[0]
-        brain_CR_S_data['I1'] = brain_CR_S_data[gammas].apply(I1_s)
-        brain_CR_S_data['I2'] = brain_CR_S_data[gammas].apply(I1_s)
-        brain_CR_S_data['F'] = brain_CR_S_data[gammas].apply(F_s)
+        mechanical_variables = {
+            "I1": [I1_tc, I1_s],
+            "I2": [I2_tc, I1_s],
+            "F":  [F_tc, F_s],
+            "exp_type": [(lambda x: 1), (lambda x: 0)] # 1 - torsion&compression, 0 - shear
+        }
 
-        lam = pd.concat([brain_CR_TC_data[lambdas], brain_CR_S_data[gammas]], ignore_index=True)
-        I1 = pd.concat([brain_CR_TC_data['I1'], brain_CR_S_data['I1']], ignore_index=True)
-        I2 = pd.concat([brain_CR_TC_data['I2'], brain_CR_S_data['I2']], ignore_index=True)
-        F = pd.concat([brain_CR_TC_data['F'], brain_CR_S_data['F']], ignore_index=True)
-        # C = F.apply(lambda x: x.t().matmul(x))
+        # calculate I1, I2, F from lambda (torsion&compression and shear)
+        for variable in mechanical_variables.keys():
+            func_calc = mechanical_variables.get(variable)
+            brain_CR_TC_data[variable] = brain_CR_TC_data["lambda"].apply(func_calc[0])
+            brain_CR_S_data[variable]  = brain_CR_S_data["gamma"].apply(func_calc[1])
+            # I1 = pd.concat([brain_CR_TC_data[variable], brain_CR_S_data[variable]], ignore_index=True)
+        brain_CR_S_data["lambda"] = brain_CR_S_data.pop("gamma")
+        data = pd.concat([brain_CR_TC_data, brain_CR_S_data], ignore_index=True)
 
-        invariants = pd.Series(zip(torch.tensor(I1, dtype=dataset_type, device=self.device),
-                                   torch.tensor(I2, dtype=dataset_type, device=self.device)))
-        invariants.name = "invariants"
-
-        true_stress = pd.concat([brain_CR_TC_data["P"], brain_CR_S_data["P"]], ignore_index=True, axis=0)
-        data = pd.concat((lam, F, invariants, true_stress), axis=1)
-        data = data.rename(columns={0: 'lambda'})
+        print(*data.iloc[1])
+        # lambdas = brain_CR_TC_data.columns[0]
+        # brain_CR_TC_data['I1']       = brain_CR_TC_data["lambda"].apply(I1_tc)
+        # brain_CR_TC_data['I2']       = brain_CR_TC_data["lambda"].apply(I2_tc)
+        # brain_CR_TC_data['F']        = brain_CR_TC_data["lambda"].apply(F_tc)
+        # brain_CR_TC_data['exp_type'] = brain_CR_TC_data["lambda"] * 0 + 1
+        #
+        # print(brain_CR_TC_data['I1'] == brain_CR_TC_data['I1_new'])
+        # # calculate I1, I2, F from gamma (shear)
+        # gammas = brain_CR_S_data.columns[0]
+        # brain_CR_S_data['I1']       = brain_CR_S_data["gamma"].apply(I1_s)
+        # brain_CR_S_data['I2']       = brain_CR_S_data["gamma"].apply(I1_s)
+        # brain_CR_S_data['F']        = brain_CR_S_data["gamma"].apply(F_s)
+        # brain_CR_S_data['exp_type'] = brain_CR_S_data["gamma"] * 0
+        #
+        # lam = pd.concat([brain_CR_TC_data["lambda"], brain_CR_S_data["gamma"]], ignore_index=True)
+        # I1  = pd.concat([brain_CR_TC_data['I1'],     brain_CR_S_data['I1']], ignore_index=True)
+        # I2  = pd.concat([brain_CR_TC_data['I2'],     brain_CR_S_data['I2']], ignore_index=True)
+        # F   = pd.concat([brain_CR_TC_data['F'],      brain_CR_S_data['F']], ignore_index=True)
+        # # C = F.apply(lambda x: x.t().matmul(x))
+        #
+        # invariants = pd.Series(zip(torch.tensor(I1, dtype=dataset_type, device=self.device),
+        #                            torch.tensor(I2, dtype=dataset_type, device=self.device)))
+        # invariants.name = "invariants"
+        #
+        # markers = pd.concat([brain_CR_TC_data["exp_type"], brain_CR_S_data["exp_type"]], ignore_index=True, axis=0)
+        #
+        # true_stress = pd.concat([brain_CR_TC_data["P"], brain_CR_S_data["P"]], ignore_index=True, axis=0)
+        # data = pd.concat((lam, F, invariants, true_stress, markers), axis=1)
+        # data = data.rename(columns={0: 'lambda'})
         # print(data.iloc[1])
         return data
 
@@ -209,15 +236,16 @@ if __name__ == "__main__":
     data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
     brain_dataset = ExcelDataset(data_path, device="cpu")
-    data = brain_dataset.data
-    print(data.iloc[:, 0])
-    lam, F, features, target = data
-    print(type(lam))
+    print(brain_dataset[10])
+    # data = brain_dataset.data
 
-    f = brain_dataset.features
-    t = brain_dataset.target
+    # lam, F, features, target = data
+    # print(type(lam))
 
-    print(brain_dataset)
+    # f = brain_dataset.features
+    # t = brain_dataset.target
+    #
+    # print(t)
 
     # F = F_tc(0.9)
     # C = F.t() @ F
