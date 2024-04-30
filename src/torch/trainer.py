@@ -19,7 +19,7 @@ class Trainer:
                  experiment_name: Optional[str] = "test",
                  model: Optional[nn.Module] = StrainEnergyCANN_C,
                  device: Optional[str] = "cpu",
-                 learning_rate: Optional[float] = 0.1,
+                 learning_rate: Optional[float] = 0.001,
                  epochs: Optional[int] = 100,
                  plot_valid: Optional[bool] = False,
                  batch_size: Optional[int] = 1
@@ -179,10 +179,8 @@ class Trainer:
         plt.show()
         if self.plot_valid:
             plt.figure(figsize=(10, 5))
-            plt.plot(predictions_P11, label='P11_pred', color='blue')
-            plt.plot(predictions_P12, label='P12_pred', color='red')
-            plt.plot(targets_P11, label='P11', color='black')
-            plt.plot(targets_P12, label='P12', color='gray')
+            plt.plot(vpredictions, label='Ppred', color='red')
+            plt.plot(vtargets, label='P_true', color='black')
             plt.xlabel('lambda/gamma')
             plt.ylabel('P')
             plt.title('Predictions vs. Targets')
@@ -195,6 +193,7 @@ class Trainer:
 if __name__ == "__main__":
     data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
-    test_train = Trainer(plot_valid=True)
-    data_loader = test_train.load_data(data_path, transform=None)
-    trained_model = test_train.train(data_loader, data_loader)
+    test_train = Trainer(plot_valid=True, epochs=10000, experiment_name="FIRST")
+    train_data_loader = test_train.load_data(data_path, transform=None)
+    test_data_loader = test_train.load_data(data_path, transform=None)
+    trained_model = test_train.train(train_data_loader, test_data_loader)

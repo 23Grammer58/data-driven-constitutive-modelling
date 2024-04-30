@@ -30,8 +30,8 @@ device = "cpu"
 # input_size = 2  # Размерность входных данных
 # output_size = 1  # Размерность выходных данных
 # hidden_size = 270  # Новое количество нейронов на слое
-learning_rate = 0.0001
-EPOCHS = 5
+learning_rate = 0.1
+EPOCHS = 1000
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 
@@ -110,16 +110,15 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
 
         last_data = len(train_loader)
         for i, data in enumerate(train_loader):
+            F, invariants, targets, exp_type = data
 
-
-            F, invariants, targets = data
             # i1, i2 = invariants.squeeze().squeeze()
             # invariants = (i1.requires_grad_(True), i2.requires_grad_(True))
             # if len(invariants) != 2:
             #     print(invariants)
 
             F = F.reshape(-1, 3)
-            inputs = (F, invariants)
+            inputs = (F, invariants, exp_type)
             targets = targets.reshape(-1, 3)
 
             # inputs, targets = inputs.to(device), targets.to(device)
@@ -197,9 +196,9 @@ def train(train_loader, test_loader, experiment_name, plot_valid=False):
 
         with torch.no_grad():
             for i, vdata in enumerate(test_loader):
-                F, invariants, target = vdata
+                F, invariants, target, exp_type = vdata
                 F = F.reshape(-1, 3)
-                vinputs = (F, invariants)
+                vinputs = (F, invariants, exp_type)
                 vtargets = target.reshape(-1, 3)
                 targets_P11.append(vtargets[0, 0])
                 targets_P12.append(vtargets[0, 1])
