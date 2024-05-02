@@ -91,7 +91,7 @@ class Trainer:
                 print(f"Directory {path_to_save_weights} already exists")
 
         loss_fn = nn.MSELoss()
-        optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=1e-3)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
         def train_one_epoch(epoch_index):
             running_loss = 0.
@@ -114,8 +114,8 @@ class Trainer:
                 # if l2_reg is not None:
                 #     loss = loss + 0.5 * self.l2_reg_coeff * l2_reg + self.l1_reg_coeff * l1_reg
 
-                # loss.backward(retain_graph=True)
-                loss.backward()
+                loss.backward(retain_graph=True)
+                # loss.backward()
                 optimizer.step()
 
                 tb_x = epoch_index * len(train_loader) + i + 1
@@ -175,9 +175,9 @@ class Trainer:
                 torch.save(self.model.state_dict(), path_to_save_weights)
                 print(self.model.get_potential())
 
-            elif epoch % (self.epochs // 100) == 0:
+            elif epoch % 10 == 0:
                 # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
-                model_path = '{}_{}'.format(self.timestamp, epoch_number)
+                model_path = '{}_{}'.format(self.timestamp, epoch)
                 path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
                 print(f"Saved PyTorch Model State to {path_to_save_weights}")
                 torch.save(self.model.state_dict(), path_to_save_weights)
@@ -206,7 +206,7 @@ class Trainer:
 def main():
     data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
-    test_train = Trainer(plot_valid=True, epochs=10000, experiment_name="FIRST_weights")
+    test_train = Trainer(plot_valid=True, epochs=10, experiment_name="FIRST_weights", l2_reg_coeff=0.)
     train_data_loader = test_train.load_data(data_path, transform=None)
     test_data_loader = test_train.load_data(data_path, transform=None)
     trained_model = test_train.train(train_data_loader, test_data_loader)
