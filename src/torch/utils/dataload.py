@@ -88,7 +88,8 @@ class ExcelDataset(Dataset):
                 psi=None,
                 dataset_type=torch.float32,
                 numerical_data=False,
-                device = "cuda"
+                device = "cuda",
+                batch_size=1
     ):
         super().__init__()
 
@@ -107,6 +108,7 @@ class ExcelDataset(Dataset):
         else:
             self.path = path
             self.data = self.full_field_data(path)
+            self.batch_size = batch_size
 
     def __len__(self):
         return len(self.data)
@@ -152,7 +154,8 @@ class ExcelDataset(Dataset):
             "I1": [I1_tc, I1_s],
             "I2": [I2_tc, I1_s],
             "F":  [F_tc, F_s],
-            "exp_type": [(lambda x: 1), (lambda x: 0)] # 1 - torsion&compression, 0 - shear
+            # "exp_type": [(lambda x: 1), (lambda x: 0)] # 1 - torsion&compression, 0 - shear
+            # "torsion_compression": (lambda x: 1)
         }
 
         # calculate I1, I2, F from lambda (torsion&compression and shear)
@@ -162,8 +165,9 @@ class ExcelDataset(Dataset):
             brain_CR_S_data[variable]  = brain_CR_S_data["gamma"].apply(func_calc[1])
             # I1 = pd.concat([brain_CR_TC_data[variable], brain_CR_S_data[variable]], ignore_index=True)
         brain_CR_S_data["lambda"] = brain_CR_S_data.pop("gamma")
+        brain_CR_TC_data["exp_type"] = [0.5 if i < len(brain_CR_TC_data) / 2 else 1.5  for i in range(len(brain_CR_TC_data))]
+        brain_CR_S_data["exp_type"] = [1.  for i in range(len(brain_CR_S_data))]
         data = pd.concat([brain_CR_TC_data, brain_CR_S_data], ignore_index=True)
-
         return data
 
     def to_tensor(self):
