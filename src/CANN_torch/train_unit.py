@@ -53,6 +53,7 @@ class Trainer:
         self.writer = SummaryWriter('runs/fashion_trainer_{}'.format(self.timestamp))
         self.path_to_save_weights = os.path.join("pretrained_models", self.experiment_name)
         self.batch_size = batch_size
+        self.path_to_best_weights = None
 
     def load_data(self,
                   path_to_exp_names,
@@ -93,11 +94,11 @@ class Trainer:
         loss_fn = nn.MSELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
+        last_data = len(train_loader)
         def train_one_epoch(epoch_index):
             running_loss = 0.
             last_loss = 0.
 
-            last_data = len(train_loader)
             for i, data in enumerate(train_loader):
                 features, target = data
                 _, _, _, _, exp_type = features
@@ -162,7 +163,7 @@ class Trainer:
                         vtargets.append(vtarget)
             else:
                 running_vloss = avg_loss
-            avg_vloss = running_vloss / 66
+            avg_vloss = running_vloss / last_data
             print()
             # print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
@@ -173,7 +174,9 @@ class Trainer:
                 path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
                 print(f"Saved PyTorch Model State to {path_to_save_weights}")
                 torch.save(self.model.state_dict(), path_to_save_weights)
-                print(self.model.get_potential())
+                self.path_to_best_weights = path_to_save_weights
+
+                # print(self.model.get_potential())
 
             elif epoch % 10 == 0:
                 # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
@@ -200,17 +203,36 @@ class Trainer:
             plt.legend()
             plt.show()
 
-        return self.model
+        return self
 
 
 def main():
     data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
 
-    test_train = Trainer(plot_valid=True, epochs=10, experiment_name="FIRST_weights", l2_reg_coeff=0.)
-    train_data_loader = test_train.load_data(data_path, transform=None)
-    test_data_loader = test_train.load_data(data_path, transform=None)
-    trained_model = test_train.train(train_data_loader, test_data_loader)
+    test_train = Trainer(plot_valid=True, epochs=6000, experiment_name="FIRST_weights", l2_reg_coeff=0.001)
+    # train_data_loader = test_train.load_data(data_path, transform=None)
+    test_data_loader = test_train.load_data(data_path, transform=None, shuffle=False)
+    # trained_model = test_train.train(train_data_loader, test_data_loader)
+    trained_model = StrainEnergyCANN_C()
+    trained_model.load_state_dict(torch.load(
+        r"/src/CANN_torch\pretrained_models\FIRST_weights\20240502_153939_734.pth"))
+    trained_model.eval()
+    vpredictions = []
+    vtargets = []
+    for data in test_data_loader:
+        features, target = data
+        if features[-1] == 1.5:
+            vpredictions.append(trained_model(features).detach().numpy())
+            vtargets.append(target.detach().numpy())
 
+    plt.figure(figsize=(10, 5))
+    plt.plot(vpredictions, label='P_pred', color='red')
+    plt.plot(vtargets, label='P_true', color='black')
+    plt.xlabel('lambda/gamma')
+    plt.ylabel('P')
+    plt.title('Predictions vs. Targets')
+    plt.legend()
+    plt.show()
 
 if __name__ == "__main__":
     main()

@@ -22,7 +22,7 @@ def save_pk2_anl_shear():
         piola_kirchgoff_2_anl.append(piola_kirchgoff_2(f1, f2(invariant),
                                                        C_inv=C_inv_shear))
 
-    np.save("../torch/piola_kirchhoff_analytical_val.npy", piola_kirchgoff_2_anl)
+    np.save("../CANN_torch/piola_kirchhoff_analytical_val.npy", piola_kirchgoff_2_anl)
 
 
 lambda1 = lambda I1, I2: I1 / 2 + ((I1 / 2) ** 2 - I2) ** 0.5
@@ -45,7 +45,7 @@ def save_pk2_anl():
     piola_kirchgoff_2_anl = np.array(piola_kirchgoff_2_anl)
     print(piola_kirchgoff_2_anl[:5])
     print(piola_kirchgoff_2_anl.shape)
-    np.save("../torch/piola_kirchhoff_analytical_val.npy", piola_kirchgoff_2_anl)
+    np.save("../CANN_torch/piola_kirchhoff_analytical_val.npy", piola_kirchgoff_2_anl)
 
 
 if __name__ == "__main__":
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         C_arr.append(C_inv_ras(lambda1(invariant[0], invariant[1]),
                                lambda2(invariant[0], invariant[1])))
 
-    np.save("../torch/utils/C_inv.npy", C_arr)
+    np.save("../CANN_torch/utils/C_inv.npy", C_arr)
 
 # save_pk2_anl()
 #     for invariant in X_val.values:

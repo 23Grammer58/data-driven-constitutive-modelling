@@ -7,7 +7,7 @@
 *.so
 *.ipynb_checkpoints
 __pycache__
-/src/torch/runs/
+/src/CANN_torch/runs/
 *_names.txt
 /CANN
 /recover/
