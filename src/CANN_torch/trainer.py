@@ -6,7 +6,6 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 import os
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 from typing import Optional
 from sklearn.metrics import r2_score
 
@@ -77,7 +76,7 @@ class Trainer:
         if checkpoint:
             self.model.load_state_dict(torch.load(checkpoint))
 
-    def train(self, train_loader, test_loader):
+    def train(self, train_loader, test_loader, weighting_data=True):
         # Initialize the model, loss function, and optimizer
 
         if self.experiment_name is not None:
@@ -105,7 +104,9 @@ class Trainer:
                 optimizer.zero_grad()
                 stress_model = self.model(features)
 
-                loss = loss_fn(stress_model, target) * exp_type
+                loss = loss_fn(stress_model, target)
+                if weighting_data:
+                    loss += exp_type
                 penalty = negative_regularizer(self.model)
                 loss += penalty
 
