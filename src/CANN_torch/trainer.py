@@ -135,7 +135,7 @@ class Trainer:
         vtargets = []
 
         # Training the model
-        for epoch in tqdm(range(self.epochs)):
+        for epoch in range(self.epochs):
             self.model.train(True)
             avg_loss = train_one_epoch(epoch_number)
 
