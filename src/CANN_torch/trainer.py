@@ -8,8 +8,8 @@ import os
 import matplotlib.pyplot as plt
 from typing import Optional
 from sklearn.metrics import r2_score
-
-from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C
+from models.CNN import *
+# from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C, StrainEnergyCANN_polinomial3
 from utils.dataload import ExcelDataset, normalize_data
 from utils.visualisation import *
 
@@ -89,7 +89,7 @@ class Trainer:
 
         loss_fn = nn.MSELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        negative_regularizer = NegativeRegularization(weight_decay=1.)
+        negative_regularizer = NegativeRegularization(weight_decay=0.)
 
         last_data = len(train_loader)
         def train_one_epoch(epoch_index):
@@ -107,18 +107,25 @@ class Trainer:
                 loss = loss_fn(stress_model, target)
                 if weighting_data:
                     loss += exp_type
-                penalty = negative_regularizer(self.model)
-                loss += penalty
-
-                # print(loss.item())
+                # penalty = negative_regularizer(self.model)
+                # loss += penalty
+                #
+                # # print(loss.item())
                 # l1_reg = self.model.calc_l1()
-                # l2_reg = self.model.calc_regularization(2)
-                # if l2_reg is not None:
-                #     loss = loss + 0.5 * self.l2_reg_coeff * l2_reg + self.l1_reg_coeff * l1_reg
+                l2_reg = self.model.calc_regularization(2)
+                if l2_reg is not None:
+                    loss += 0.5 * self.l2_reg_coeff * l2_reg
+
+                # if l1_reg is not None:
+                #     loss += self.l1_reg_coeff * l1_reg
 
                 loss.backward(retain_graph=True)
                 # loss.backward()
+
                 optimizer.step()
+
+                # turn negative weights to zero
+                self.model.clamp_weights()
 
                 tb_x = epoch_index * len(train_loader) + i + 1
                 self.writer.add_scalar('Loss/train', loss.item(), tb_x)
@@ -205,6 +212,7 @@ class Trainer:
             plt.show()
 
         self.model.load_state_dict(torch.load(self.path_to_best_weights))
+        print(self.path_to_best_weights)
         return self.model
 
     def load_data(self,
@@ -238,20 +246,21 @@ class Trainer:
 
 
 def main():
-    data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
-    best_model_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\FIRST_weights\20240503_160925_800.pth"
+    data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
+    best_model_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\FIRST_weights\20240516_194300_147.pth"
     test_train = Trainer(
         plot_valid=False,
         epochs=2000,
         experiment_name="FIRST_weights",
         l2_reg_coeff=0.01,
         learning_rate=0.001,
-        checkpoint=best_model_path
+        checkpoint=None,
+
     )
 
     train_data_loader = test_train.load_data(data_path, transform=None)
     test_data_loader = test_train.load_data(data_path, transform=None, shuffle=False)
-    trained_model = test_train.train(train_data_loader, test_data_loader)
+    trained_model = test_train.train(train_data_loader, test_data_loader, weighting_data=False)
     # trained_model = StrainEnergyCANN_C()
     # trained_model.load_state_dict(torch.load(best_model_path))
     trained_model.eval()
