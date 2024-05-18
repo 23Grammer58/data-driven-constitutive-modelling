@@ -26,6 +26,10 @@ pip install -e .
 - `checkpoint` (str): Путь до весов модели, с которыми модель инициализируется. По умолчанию 1.
 - `device` (str): Устройство для выполнения вычислений (cpu или cuda). По умолчанию "cpu".
 
-License
+## Литература 
+Linka, Kevin, Sarah R. St Pierre, and Ellen Kuhl. "Automated model discovery for human brain using Constitutive Artificial Neural Networks." Acta Biomaterialia 160 (2023): 134-151.
+
+
+## License
 This project is licensed under the MIT License.
 
