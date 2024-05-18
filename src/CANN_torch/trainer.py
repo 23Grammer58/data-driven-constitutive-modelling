@@ -19,19 +19,6 @@ def r2_score_own(Truth, Prediction):
     return max(R2,0.0)
 
 
-class NegativeRegularization(nn.Module):
-    def __init__(self, weight_decay):
-        super(NegativeRegularization, self).__init__()
-        self.weight_decay = weight_decay
-
-    def forward(self, model):
-        penalty = 0
-        for param in model.parameters():
-            if torch.sum(param < 0) > 0:
-                penalty += torch.sum(param[param < 0]) ** 2  # Пример штрафа за отрицательные веса
-
-        return self.weight_decay * penalty
-
 class Trainer:
     def __init__(self,
                  checkpoint: str = None,
@@ -46,18 +33,20 @@ class Trainer:
                  l2_reg_coeff: Optional[float] = 0.001,
                  ):
         """
-        A class for training CANN model.
+        Класс для обучения CANN моделей.
 
-        Attributes:
-            experiment_name (str): Name of the experiment. Defaults to "test".
-            model (nn.Module): The neural network model to be trained. Defaults to `StrainEnergyCANN_C`.
-            device (str): The device to run the training on. Can be "cpu" or "cuda". Defaults to "cpu".
-            learning_rate (float): The learning rate for the optimizer. Defaults to 0.1.
-            epochs (int): The number of epochs to train for. Defaults to 100.
-            plot_valid (bool): Whether to plot the validation loss. Defaults to False.
-            batch_size (int): The batch size for training. Defaults to 1.
-            timestamp (str): The timestamp of the training session.
-            writer (SummaryWriter): The TensorBoard writer for logging.
+         Аргументы:
+            - `experiment_name` (str): Название эксперимента. По умолчанию "test".
+            - `model` (nn.Module): Архитектура модели для обучения. По умолчанию `StrainEnergyCANN_C`.
+            - `path_to_save_weights` (str): Путь для сохранения весов модели.
+            - `epochs` (int): Количество эпох обучения. По умолчанию 100.
+            - `learning_rate` (float): Скорость обучения. По умолчанию 0.001.
+            - `plot_valid` (bool): Отрисовка ошибки на валидационном датасете. По умолчанию False.
+            - `l1_reg_coeff` (float): Коэффициент регуляризации L1. По умолчанию 0.001.
+            - `l2_reg_coeff` (float): Коэффициент регуляризации L2. По умолчанию 0.001.
+            - `checkpoint` (str): Путь до весов модели, с которыми модель инициализируется. По умолчанию 1.
+            - `device` (str): Устройство для выполнения вычислений (cpu или cuda). По умолчанию "cpu".
+
         """
 
         self.l1_reg_coeff = l1_reg_coeff
@@ -68,14 +57,14 @@ class Trainer:
         self.epochs = epochs
         self.experiment_name = experiment_name
         self.plot_valid = plot_valid
-        self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.timestamp = datetime.now().strftime('%Y%m%d_%H%M')
         self.path_to_save_weights = os.path.join("pretrained_models", self.experiment_name)
         self.batch_size = batch_size
         self.path_to_best_weights = None
         if checkpoint:
             self.model.load_state_dict(torch.load(checkpoint))
 
-    def train(self, train_loader, test_loader, weighting_data=True):
+    def train(self, train_loader, test_loader=None, weighting_data=True):
         # Initialize the model, loss function, and optimizer
 
         if self.experiment_name is not None:
@@ -88,7 +77,6 @@ class Trainer:
 
         loss_fn = nn.MSELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        negative_regularizer = NegativeRegularization(weight_decay=0.)
 
         last_data = len(train_loader)
         def train_one_epoch(epoch_index):
@@ -98,25 +86,21 @@ class Trainer:
             for i, data in enumerate(train_loader):
                 features, target = data
                 _, _, _, _, exp_type = features
-                # inputs = (F, i1, i2, exp_type)
 
                 optimizer.zero_grad()
                 stress_model = self.model(features)
 
                 loss = loss_fn(stress_model, target)
                 if weighting_data:
-                    loss += exp_type
-                # penalty = negative_regularizer(self.model)
-                # loss += penalty
-                #
-                # # print(loss.item())
-                # l1_reg = self.model.calc_l1()
-                l2_reg = self.model.calc_regularization(2)
-                if l2_reg is not None:
+                    loss *= exp_type
+
+                if self.l2_reg_coeff is not None:
+                    l2_reg = self.model.calc_regularization(2)
                     loss += 0.5 * self.l2_reg_coeff * l2_reg
 
-                # if l1_reg is not None:
-                #     loss += self.l1_reg_coeff * l1_reg
+                if self.l2_reg_coeff is not None:
+                    l1_reg = self.model.calc_l1()
+                    loss += self.l1_reg_coeff * l1_reg
 
                 loss.backward(retain_graph=True)
                 # loss.backward()
@@ -147,8 +131,8 @@ class Trainer:
             running_vloss = 0.0
             self.model.eval()
 
-            validation = False
-            if validation:
+            # validation = False
+            if test_loader:
                 with torch.no_grad():
                     for i, vdata in enumerate(test_loader):
                         vfeatures, vtarget = vdata
@@ -158,11 +142,6 @@ class Trainer:
                         vstress = self.model(vfeatures)
                         vloss = loss_fn(vtarget, vstress)
                         running_vloss += vloss
-
-                        # targets_P11.append(vtarget[0, 0])
-                        # targets_P12.append(vtarget[0, 1])
-                        # predictions_P11.append(vstress[0, 0])
-                        # predictions_P12.append(vstress[0, 1])
 
                         vlosses.append(vloss)
                         vpredictions.append(vstress)
