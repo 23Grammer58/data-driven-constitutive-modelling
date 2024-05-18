@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-from torch.utils.tensorboard import SummaryWriter
+
 from datetime import datetime
 import os
 import matplotlib.pyplot as plt
@@ -69,7 +69,6 @@ class Trainer:
         self.experiment_name = experiment_name
         self.plot_valid = plot_valid
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.writer = SummaryWriter('runs/fashion_trainer_{}'.format(self.timestamp))
         self.path_to_save_weights = os.path.join("pretrained_models", self.experiment_name)
         self.batch_size = batch_size
         self.path_to_best_weights = None
@@ -128,7 +127,6 @@ class Trainer:
                 self.model.clamp_weights()
 
                 tb_x = epoch_index * len(train_loader) + i + 1
-                self.writer.add_scalar('Loss/train', loss.item(), tb_x)
                 # last_loss = loss.item()
                 running_loss += loss.item()
 
@@ -246,7 +244,7 @@ class Trainer:
 
 
 def main():
-    data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
+    data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
     best_model_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\FIRST_weights\20240516_194300_147.pth"
     test_train = Trainer(
         plot_valid=False,

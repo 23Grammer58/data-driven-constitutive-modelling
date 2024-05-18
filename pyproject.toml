@@ -10,21 +10,23 @@ dependencies = [
   "scipy>=1.12",
   "pandas>=1.26",
   "torch>=1.12",
-  "torchvision>=1.26",
+  "torchvision>=0.15",
   "tqdm>=1.12",
-
+  "matplotlib>=3.8",
+  "scikit-learn>=1.4",
+  "openpyxl>=3.1"
 ]
 requires-python = ">=3.8"
 authors = [
-  {name = "Butakov Ivan", email = "vanessbut@yandex.com"},
+  {name = "Dits Daniil", email = "daniil.dits@gmail.com"},
 ]
 maintainers = [
-  {name = "Butakov Ivan", email = "vanessbut@yandex.com"}
+  {name = "Dits Daniil", email = "daniil.dits@gmail.com"}
 ]
-description = "Mutual information estimation benchmarks and tests"
+description = "Automated model discovery of hyperelastic materials with pytorch"
 readme = "README.md"
-license = {file = "LICENSE"}
-keywords = ["mutual information", "information theory", "benchmarks"]
+#license = {file = "LICENSE"}
+keywords = ["data-driven", "soft tissue mechanics", "pinn"]
 classifiers = [
   "Development Status :: 1 - Planning",
   "Programming Language :: Python :: 3",
@@ -32,9 +34,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/VanessB/mutinfo.git"
-"Bug Tracker" = "https://github.com/VanessB/mutinfo/issues"
-Changelog = "https://github.com/VanessB/mutinfo/blob/master/CHANGELOG.md"
+Repository = "https://github.com/23Grammer58/data-driven-constitutive-modelling"
 
 [tool.hatch.build.targets.wheel]
 packages = ["source/python/mutinfo"]
