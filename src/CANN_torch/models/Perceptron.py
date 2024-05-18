@@ -1,14 +1,5 @@
 import torch
 import torch.nn as nn
-# import torch.optim as optim
-# from torch.utils.data import DataLoader, TensorDataset
-# # import tqdm
-# from dataload import ExcelDataset
-# from torchmetrics.regression import MeanSquaredError
-# from torchviz import make_dot
-#
-# import os
-# import math
 from math import exp
 
 
@@ -18,37 +9,6 @@ output_size = 1  # Размерность выходных данных
 hidden_size = 270  # Новое количество нейронов на слое
 learning_rate = 0.001
 epochs = 100
-
-# class QuadricNeuronR2(nn.Module):
-#     # constructor
-#     def __init__(self):
-#         super().__init__()
-#         # model parameters
-#         # quadratic weights
-#         q = torch.Tensor(1, 2)
-#         self.q = nn.Parameter(q)
-#         # linear weights
-#         w = torch.Tensor(1, 2)
-#         self.w = nn.Parameter(w)
-#         # bias
-#         b = torch.Tensor(1)
-#         self.b = nn.Parameter(b)
-#         # initialize
-#         nn.init.kaiming_uniform_(self.q, a=math.sqrt(5))
-#         fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.q)
-#         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
-#         fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.w)
-#         bound = 1 / math.sqrt(fan_in)
-#         nn.init.uniform_(self.b, -bound, bound)
-#
-#     # forward method to define the computation in the model
-#     def forward(self, i: torch.Tensor) -> torch.Tensor:
-#         isqr = torch.mul(i, i)
-#         i = i.unsqueeze(0)
-#         qi = torch.mm(isqr, self.q.t())
-#         wi = torch.mm(i, self.w.t())
-#         o = torch.add(torch.add(qi, wi), self.b)
-#         return o
 
 
 class QuadricNeuronR2(nn.Module):
