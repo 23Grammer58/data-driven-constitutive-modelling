@@ -248,7 +248,7 @@ def main():
     best_model_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\FIRST_weights\20240516_194300_147.pth"
     test_train = Trainer(
         plot_valid=False,
-        epochs=2000,
+        epochs=10,
         experiment_name="FIRST_weights",
         l2_reg_coeff=0.01,
         learning_rate=0.001,
