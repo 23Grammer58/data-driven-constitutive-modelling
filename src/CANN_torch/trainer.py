@@ -12,7 +12,7 @@ from models.CNN import *
 # from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C, StrainEnergyCANN_polinomial3
 from utils.dataload import ExcelDataset, normalize_data
 from utils.visualisation import *
-
+import seaborn as sns
 
 def r2_score_own(Truth, Prediction):
     R2 = r2_score(Truth,Prediction)
@@ -64,7 +64,10 @@ class Trainer:
         if checkpoint:
             self.model.load_state_dict(torch.load(checkpoint))
 
-    def train(self, train_loader, test_loader=None, weighting_data=True):
+    def train(self,
+              train_loader=Optional[DataLoader],
+              test_loader=Optional[DataLoader],
+              weighting_data=True):
         # Initialize the model, loss function, and optimizer
 
         if self.experiment_name is not None:
@@ -110,7 +113,6 @@ class Trainer:
                 # turn negative weights to zero
                 self.model.clamp_weights()
 
-                tb_x = epoch_index * len(train_loader) + i + 1
                 # last_loss = loss.item()
                 running_loss += loss.item()
 
@@ -118,7 +120,7 @@ class Trainer:
 
         epoch_number = 0
         best_vloss = torch.inf
-        elosses = []
+        loss_history = []
         vlosses = []
         vpredictions = []
         vtargets = []
@@ -128,40 +130,36 @@ class Trainer:
             self.model.train(True)
             avg_loss = train_one_epoch(epoch_number)
 
-            running_vloss = 0.0
-            self.model.eval()
+            # running_vloss = 0.0
 
             # validation = False
             if test_loader:
-                with torch.no_grad():
-                    for i, vdata in enumerate(test_loader):
-                        vfeatures, vtarget = vdata
+                running_vloss = self.test(test_loader)
+                # for i, vdata in enumerate(test_loader):
+                #     vfeatures, vtarget = vdata
+                #
+                #     optimizer.zero_grad()
+                #     # stress_model = self.model(vfeatures)
+                #     vstress = self.model(vfeatures)
+                #     vloss = loss_fn(vtarget, vstress)
+                #     running_vloss += vloss
 
-                        optimizer.zero_grad()
-                        # stress_model = self.model(vfeatures)
-                        vstress = self.model(vfeatures)
-                        vloss = loss_fn(vtarget, vstress)
-                        running_vloss += vloss
-
-                        vlosses.append(vloss)
-                        vpredictions.append(vstress)
-                        vtargets.append(vtarget)
             else:
                 running_vloss = avg_loss
-            # avg_vloss = running_vloss / last_data
+            avg_vloss = running_vloss / last_data
             print()
             # print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
-            print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}')
-            if avg_loss < best_vloss:
-                best_vloss = avg_loss
+            print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
+            if avg_vloss < best_vloss:
+                best_vloss = avg_vloss
                 model_path = '{}_{}'.format(self.timestamp, epoch)
                 path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
                 print(f"Saved PyTorch Model State to {path_to_save_weights}")
                 torch.save(self.model.state_dict(), path_to_save_weights)
                 self.path_to_best_weights = path_to_save_weights
 
-                print(self.model.get_potential())
+                print("psi = ", self.model.get_potential())
 
             elif epoch % 100 == 0:
                 # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
@@ -169,28 +167,51 @@ class Trainer:
                 path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
                 print(f"Saved PyTorch Model State to {path_to_save_weights}")
                 torch.save(self.model.state_dict(), path_to_save_weights)
-                print(self.model.get_potential())
-            elosses.append(avg_loss)
+                print("psi = ", self.model.get_potential())
+            loss_history.append(avg_loss)
             # epoch_number += 1
 
-        plt.plot(elosses)
+        plt.plot(loss_history)
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.title('Training Loss')
         plt.show()
-        if self.plot_valid:
-            plt.figure(figsize=(10, 5))
-            plt.plot(vpredictions, label='Ppred', color='red')
-            plt.plot(vtargets, label='P_true', color='black')
-            plt.xlabel('lambda/gamma')
-            plt.ylabel('P')
-            plt.title('Predictions vs. Targets')
-            plt.legend()
-            plt.show()
 
         self.model.load_state_dict(torch.load(self.path_to_best_weights))
         print(self.path_to_best_weights)
+
+        # if self.plot_valid:
+        #     plt.figure(figsize=(10, 5))
+        #     plt.plot(vpredictions, label='Ppred', color='red')
+        #     plt.plot(vtargets, label='P_true', color='black')
+        #     plt.xlabel('lambda/gamma')
+        #     plt.ylabel('P')
+        #     plt.title('Predictions vs. Targets')
+        #     plt.legend()
+        #     plt.show()
+
         return self.model
+
+    def test(self, val_loader: DataLoader):
+        """
+        Validate the model on the validation dataset.
+
+        Parameters:
+        - val_loader (DataLoader): DataLoader object for validation data.
+        """
+        self.model.eval()
+        val_loss = 0.0
+        for data in val_loader:
+            inputs, labels = data
+            inputs, labels = inputs, labels
+
+            outputs = self.model(inputs)
+            loss = nn.MSELoss()(outputs, labels)
+            val_loss += loss.item()
+
+        # print(f'Validation loss: {val_loss / len(val_loader):.3f}')
+        self.model.train()  # Return model to training mode
+        return val_loss
 
     def load_data(self,
                   path_to_exp_names: str,
@@ -221,9 +242,36 @@ class Trainer:
 
         return dataset_loader
 
+    def visualize_predictions(self, dataset, predictions, experiment_col='Experiment', x_col=0, y_col=1):
+        """
+        Visualize dataset and predictions.
+
+        Parameters:
+        - experiment_col (str): The column name for the experiment identifier.
+        - x_col (int or str): The column name or index for the x-axis data.
+        - y_col (int or str): The column name or index for the y-axis data.
+        """
+
+        # Set seaborn style
+        sns.set(style="whitegrid")
+
+        # Create a combined plot of the dataset
+        g = sns.relplot(
+            data=dataset,
+            x=x_col, y=y_col, col=experiment_col, kind='line', height=4, aspect=1.2,
+            facet_kws={'sharey': False, 'sharex': False}
+        )
+
+        # Add predictions to the plot
+        for ax, (exp, group) in zip(g.axes.flat, predictions.groupby(experiment_col)):
+            ax.plot(group[x_col], group[y_col], label='Prediction', linestyle='--')
+            ax.legend()
+
+        plt.show()
+
 
 def main():
-    data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
+    data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
     best_model_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\FIRST_weights\20240516_194300_147.pth"
     test_train = Trainer(
         plot_valid=False,
