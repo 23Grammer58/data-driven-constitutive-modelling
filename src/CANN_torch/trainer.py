@@ -13,6 +13,7 @@ from models.CNN import *
 from utils.dataload import ExcelDataset, normalize_data
 from utils.visualisation import *
 import seaborn as sns
+import pandas as pd
 
 def r2_score_own(Truth, Prediction):
     R2 = r2_score(Truth,Prediction)
@@ -31,6 +32,7 @@ class Trainer:
                  batch_size: int = 1,
                  l1_reg_coeff: Optional[float] = 0.001,
                  l2_reg_coeff: Optional[float] = 0.001,
+                 dtype = torch.float32
                  ):
         """
         Класс для обучения CANN моделей.
@@ -51,7 +53,7 @@ class Trainer:
 
         self.l1_reg_coeff = l1_reg_coeff
         self.l2_reg_coeff = l2_reg_coeff
-        self.model = model(batch_size, device=device)
+        self.model = model(batch_size, device=device, dtype=dtype)
         self.device = device
         self.learning_rate = learning_rate
         self.epochs = epochs
@@ -116,19 +118,20 @@ class Trainer:
                 # last_loss = loss.item()
                 running_loss += loss.item()
 
-            return running_loss / last_data
+            return running_loss
 
         epoch_number = 0
         best_vloss = torch.inf
         loss_history = []
-        vlosses = []
-        vpredictions = []
-        vtargets = []
+        best_epoch = 0
+        # vlosses = []
+        # vpredictions = []
+        # vtargets = []
 
         # Training the model
         for epoch in range(self.epochs):
             self.model.train(True)
-            avg_loss = train_one_epoch(epoch_number)
+            avg_loss = train_one_epoch(epoch_number) / last_data
 
             running_vloss = 0.0
 
@@ -144,30 +147,26 @@ class Trainer:
                 #     vloss = loss_fn(vtarget, vstress)
                 #     running_vloss += vloss
 
+                avg_vloss = running_vloss / last_data
             else:
-                running_vloss = avg_loss
-            avg_vloss = running_vloss / last_data
+                avg_vloss = avg_loss
+
             print()
             # print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
             print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
             if avg_vloss < best_vloss:
+                best_epoch = epoch
                 best_vloss = avg_vloss
-                model_path = '{}_{}'.format(self.timestamp, epoch)
-                path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
-                print(f"Saved PyTorch Model State to {path_to_save_weights}")
-                torch.save(self.model.state_dict(), path_to_save_weights)
-                self.path_to_best_weights = path_to_save_weights
-
                 print("psi = ", self.model.get_potential())
 
-            elif epoch % 100 == 0:
-                # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
-                model_path = '{}_{}'.format(self.timestamp, epoch)
-                path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
-                print(f"Saved PyTorch Model State to {path_to_save_weights}")
-                torch.save(self.model.state_dict(), path_to_save_weights)
-                print("psi = ", self.model.get_potential())
+            # elif epoch % 100 == 0:
+            #     # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
+            #     # model_path = '{}_{}'.format(self.timestamp, epoch)
+            #     # path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
+            #     # print(f"Saved PyTorch Model State to {path_to_save_weights}")
+            #     # torch.save(self.model.state_dict(), path_to_save_weights)
+            #     print("psi = ", self.model.get_potential())
             loss_history.append(avg_loss)
             # epoch_number += 1
 
@@ -177,8 +176,13 @@ class Trainer:
         plt.title('Training Loss')
         plt.show()
 
+        model_path = '{}_{}'.format(self.timestamp, best_epoch)
+        path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
+        print(f"Saved PyTorch Model State to {path_to_save_weights}")
+        torch.save(self.model.state_dict(), path_to_save_weights)
+        self.path_to_best_weights = path_to_save_weights
         self.model.load_state_dict(torch.load(self.path_to_best_weights))
-        print(self.path_to_best_weights)
+        # p rint(self.path_to_best_weights)
 
         # if self.plot_valid:
         #     plt.figure(figsize=(10, 5))
@@ -242,7 +246,7 @@ class Trainer:
 
         return dataset_loader
 
-    def visualize_predictions(self, dataset, predictions, experiment_col='Experiment', x_col=0, y_col=1):
+    def visualize_predictions(self, data: pd.DataFrame):
         """
         Visualize dataset and predictions.
 
@@ -251,23 +255,43 @@ class Trainer:
         - x_col (int or str): The column name or index for the x-axis data.
         - y_col (int or str): The column name or index for the y-axis data.
         """
+        self.model.eval()
+        vpredictions = []
+        vtargets = []
+        for data in test_data_loader:
+            features, target = data
+            vpredictions.append(trained_model(features).detach().numpy())
+        print(trained_model.get_potential())
+        combined_data["P_model"] = vpredictions
 
-        # Set seaborn style
-        sns.set(style="whitegrid")
 
-        # Create a combined plot of the dataset
-        g = sns.relplot(
-            data=dataset,
-            x=x_col, y=y_col, col=experiment_col, kind='line', height=4, aspect=1.2,
-            facet_kws={'sharey': False, 'sharex': False}
-        )
+        # Преобразуем столбец с предсказанной силой в числовой формат
+        data['P_model'] = data['P_model'].apply(lambda x: float(str(x).strip('[]')))
 
-        # Add predictions to the plot
-        for ax, (exp, group) in zip(g.axes.flat, predictions.groupby(experiment_col)):
-            ax.plot(group[x_col], group[y_col], label='Prediction', linestyle='--')
-            ax.legend()
+        # Создадим графики для каждого типа эксперимента
+        experiment_types = data['experiment_type'].unique()
 
-        plt.show()
+        def plot_with_r2(data, experiment_types):
+            r2_scores = []
+            fig, axes = plt.subplots(1, len(experiment_types), figsize=(15, 6), sharey=True)
+
+            for ax, experiment in zip(axes, experiment_types):
+                subset = data[data['experiment_type'] == experiment]
+                r2 = r2_score(subset['P_experimental'], subset['P_model'])
+
+                sns.scatterplot(data=subset, x='lambda', y='P_experimental', label='P_experimental', ax=ax)
+                sns.lineplot(data=subset, x='lambda', y='P_model', label='P_model', color='orange', ax=ax)
+                ax.set_title(f'Experiment Type: {experiment}\nR² = {r2:.2f}')
+                ax.set_xlabel('Strain')
+                ax.set_ylabel('Force (kPa)')
+                r2_scores.append(r2)
+
+            plt.tight_layout()
+            plt.show()
+            return r2_scores
+
+        # Вызовем функцию для построения графиков с r2
+        plot_with_r2(data, experiment_types)
 
 
 def main():
