@@ -130,7 +130,7 @@ class Trainer:
             self.model.train(True)
             avg_loss = train_one_epoch(epoch_number)
 
-            # running_vloss = 0.0
+            running_vloss = 0.0
 
             # validation = False
             if test_loader:
