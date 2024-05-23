@@ -83,7 +83,12 @@ class Trainer:
         loss_fn = nn.MSELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
-        last_data = len(train_loader)
+        train_data_count = len(train_loader)
+
+        if test_loader is None:
+            test_data_count = train_data_count
+        else:
+            test_data_count = len(test_loader)
         def train_one_epoch(epoch_index):
             running_loss = 0.
             last_loss = 0.
@@ -97,7 +102,10 @@ class Trainer:
 
                 loss = loss_fn(stress_model, target)
                 if weighting_data:
-                    loss *= exp_type
+                    if exp_type == "Compression":
+                        loss *= 0.5
+                    elif exp_type == "Tensile":
+                        loss *= 1.5
 
                 if self.l2_reg_coeff is not None:
                     l2_reg = self.model.calc_regularization(2)
@@ -131,7 +139,7 @@ class Trainer:
         # Training the model
         for epoch in range(self.epochs):
             self.model.train(True)
-            avg_loss = train_one_epoch(epoch_number) / last_data
+            avg_loss = train_one_epoch(epoch_number) / train_data_count
 
             running_vloss = 0.0
 
@@ -147,7 +155,7 @@ class Trainer:
                 #     vloss = loss_fn(vtarget, vstress)
                 #     running_vloss += vloss
 
-                avg_vloss = running_vloss / last_data
+                avg_vloss = running_vloss / test_data_count
             else:
                 avg_vloss = avg_loss
 
@@ -157,8 +165,11 @@ class Trainer:
             print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
             if avg_vloss < best_vloss:
                 best_epoch = epoch
-                best_vloss = avg_vloss
+
                 print("psi = ", self.model.get_potential())
+                # if epoch - best_epoch > 50 and best_vloss - avg_vloss < 10e-2: break
+                best_vloss = avg_vloss
+
 
             # elif epoch % 100 == 0:
             #     # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
