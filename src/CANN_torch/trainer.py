@@ -145,33 +145,33 @@ class Trainer:
 
             # validation = False
             if test_loader:
-                running_vloss = self.test(test_loader)
-                # for i, vdata in enumerate(test_loader):
-                #     vfeatures, vtarget = vdata
-                #
-                #     optimizer.zero_grad()
-                #     # stress_model = self.model(vfeatures)
-                #     vstress = self.model(vfeatures)
-                #     vloss = loss_fn(vtarget, vstress)
-                #     running_vloss += vloss
+                # running_vloss = self.test(test_loader)
+                for i, vdata in enumerate(test_loader):
+                    vfeatures, vtarget = vdata
+
+                    optimizer.zero_grad()
+                    # stress_model = self.model(vfeatures)
+                    vstress = self.model(vfeatures)
+                    vloss = loss_fn(vtarget, vstress)
+                    running_vloss += vloss
 
                 avg_vloss = running_vloss / test_data_count
             else:
                 avg_vloss = avg_loss
 
-            print()
             # print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
-            print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
             if avg_vloss < best_vloss:
                 best_epoch = epoch
-
+                print("------------------------------------------------------------------")
+                print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
                 print("psi = ", self.model.get_potential())
                 # if epoch - best_epoch > 50 and best_vloss - avg_vloss < 10e-2: break
                 best_vloss = avg_vloss
 
 
-            # elif epoch % 100 == 0:
+            elif epoch % 100 == 0:
+                print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
             #     # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
             #     # model_path = '{}_{}'.format(self.timestamp, epoch)
             #     # path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
@@ -217,6 +217,7 @@ class Trainer:
         self.model.eval()
         val_loss = 0.0
         for data in val_loader:
+
             inputs, labels = data
             inputs, labels = inputs, labels
 
