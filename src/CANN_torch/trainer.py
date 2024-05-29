@@ -24,7 +24,7 @@ class Trainer:
     def __init__(self,
                  checkpoint: str = None,
                  experiment_name: Optional[str] = "test",
-                 model: nn.Module = StrainEnergyCANN_C,
+                 model: nn.Module = StrainEnergyCANN_Ani,
                  device: Optional[str] = "cpu",
                  learning_rate: float = 0.001,
                  epochs: int = 100,
@@ -95,11 +95,13 @@ class Trainer:
 
             for i, data in enumerate(train_loader):
                 features, target = data
-                _, _, _, _, exp_type = features
+                _, _, i1, i2, i4, i5, _, exp_type = features
 
                 optimizer.zero_grad()
                 stress_model = self.model(features)
-
+                # print(target)
+                # print(stress_model)
+                # print(i1, i2, i4, i5)
                 loss = loss_fn(stress_model, target)
                 if weighting_data:
                     if exp_type == "Compression":
@@ -161,11 +163,11 @@ class Trainer:
 
             # print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
+            print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
             if avg_vloss < best_vloss:
                 best_epoch = epoch
                 print("------------------------------------------------------------------")
-                print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
-                print("psi = ", self.model.get_potential())
+                # print("psi = ", self.model.get_potential())
                 # if epoch - best_epoch > 50 and best_vloss - avg_vloss < 10e-2: break
                 best_vloss = avg_vloss
 
