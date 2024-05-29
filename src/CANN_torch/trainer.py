@@ -180,6 +180,13 @@ class Trainer:
             #     print("psi = ", self.model.get_potential())
             loss_history.append(avg_loss)
             # epoch_number += 1
+            if epoch == self.epochs:
+                print("psi = ", self.model.get_potential())
+                model_path = '{}_{}'.format(self.timestamp, best_epoch)
+                path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
+                print(f"Saved PyTorch Model State to {path_to_save_weights}")
+                torch.save(self.model.state_dict(), path_to_save_weights)
+
 
         plt.plot(loss_history)
         plt.xlabel('Epoch')
