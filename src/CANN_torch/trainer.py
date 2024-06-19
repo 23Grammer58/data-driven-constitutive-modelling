@@ -164,22 +164,25 @@ class Trainer:
             # print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
             print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
+            # print("psi = ", self.model.get_potential())
             if avg_vloss < best_vloss:
                 best_epoch = epoch
                 print("------------------------------------------------------------------")
-                # print("psi = ", self.model.get_potential())
-                # if epoch - best_epoch > 50 and best_vloss - avg_vloss < 10e-2: break
+                print("psi = ", self.model.get_potential())
                 best_vloss = avg_vloss
 
+            if epoch - best_epoch > 50 and best_vloss - avg_vloss < 10e-2: break
 
-            elif epoch % 100 == 0:
-                print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
+            # elif epoch % 100 == 0:
+            #     print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
             #     # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
             #     # model_path = '{}_{}'.format(self.timestamp, epoch)
             #     # path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
             #     # print(f"Saved PyTorch Model State to {path_to_save_weights}")
             #     # torch.save(self.model.state_dict(), path_to_save_weights)
             #     print("psi = ", self.model.get_potential())
+            if epoch == (epochs - 1):
+                print("psi = ", self.model.get_potential())
             loss_history.append(avg_loss)
             # epoch_number += 1
 
@@ -344,6 +347,7 @@ def main():
     plt.title('Predictions vs. Targets')
     plt.legend()
     plt.show()
+
 
 if __name__ == "__main__":
     main()
