@@ -8,7 +8,7 @@ import os
 import matplotlib.pyplot as plt
 from typing import Optional
 from sklearn.metrics import r2_score
-from models.CNN import *
+from models.CNN_gpt import *
 # from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C, StrainEnergyCANN_polinomial3
 from utils.dataload import ExcelDataset, normalize_data
 from utils.visualisation import *
