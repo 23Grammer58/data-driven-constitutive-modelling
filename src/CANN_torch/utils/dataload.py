@@ -6,60 +6,6 @@ from torch.utils.data import DataLoader, random_split, Dataset, TensorDataset
 import torch
 from scipy.sparse import csr_matrix
 
-# from potential_zoo import May_Yin_psi
-dataset_type = torch.float32
-gamma = 0.2
-C_inv_shear = np.array([[1 + gamma * gamma, -gamma], [-gamma, 1]])
-
-f1 = 3300
-f2 = lambda invariant: - 2 / invariant ** 2
-
-I1_tc = lambda lam: lam ** 2 + 2.0 / lam
-I2_tc = lambda lam: 2.0 * lam + 1 / lam ** 2
-I1_s = lambda gam: gam ** 2 + 3.0
-F_tc = lambda lam: ([lam, 0, 0], [0, lam - 0.5, 0], [0, 0, lam - 0.5])
-F_s = lambda gam: ([1., gam, 0], [0, 1., 0], [0, 0, 1.])
-
-def di_df():
-    di1_df = 2 * f
-    di2_df = 2 * (I1*f - f*f.transpose*f)
-    di3_df = None
-    return np.array([di1_df, di2_df, di3_df])
-
-
-def di_dc():
-    I = np.eye(3)
-    di1_dc = I
-    di2_dc = I1 * I - C
-    di3_dc = I3 * C.transpose().inverse()
-    return np.array([di1_dc, di2_dc, di3_dc])
-
-
-def piola_kirchgoff_2(f1, f2, C_inv, miu=6600, H=1):
-    T = miu * H * (f1 * np.eye(2) + f2 * C_inv)
-    return np.array(T)
-
-
-def normalize_data(data):
-    mean = data.mean()
-    std = data.std()
-    return (data - mean) / std
-
-
-def number_to_matrix12(number):
-    matrix = torch.zeros(3, 3, dtype=torch.float32)
-    matrix[0, 1] = number
-    # return csr_matrix(matrix)
-    return matrix
-
-
-def number_to_matrix11(number):
-    matrix = torch.zeros(3, 3, dtype=torch.float32)
-    matrix[0, 0] = number
-    # return csr_matrix(matrix)
-    return matrix
-
-
 class ExcelDataset(Dataset):
     """
     A custom PyTorch Dataset for loading mechanical experiments data from Excel files.
@@ -175,33 +121,52 @@ class ExcelDataset(Dataset):
             self.data[column] = self.data[column].apply(
                 lambda x: torch.tensor(x, device=self.device, dtype=dataset_type))
 
+
+class BrainDataset(Dataset):
+    def __init__(self, dataframe):
+        self.data = dataframe.astype(float)  # Преобразуем данные в числовой тип
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        Stretch = torch.tensor(self.data.iloc[idx]['stretch'], dtype=torch.float32)
+        Gamma = torch.tensor(self.data.iloc[idx]['gamma'], dtype=torch.float32)
+        Stress_UT = torch.tensor(self.data.iloc[idx]['stress_ut'], dtype=torch.float32)
+        Stress_SS = torch.tensor(self.data.iloc[idx]['stress_ss'], dtype=torch.float32)
+        return Stretch, Gamma, Stress_UT, Stress_SS
+
+
+    def __getitem__(self, idx):
+        all_items = [*self.data.iloc[idx]]
+        features = all_items[0], all_items[2]
+        target = all_items[1], all_items[3]
+        # target = values.pop(1)
+        # features = values.remove(target)
+
+        # if self.transform:
+        #     features, target = self.transform(features, target)
+        return features, target
+
+
 if __name__ == "__main__":
-    data_path = r"C:\Users\drani\dd\data-driven-constitutive-modelling\data\brain_bade\CANNsBRAINdata.xlsx"
+    all_data_path = r'C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\brain_bade/CANNsBRAINdata.xlsx'
+    xls = pd.ExcelFile(all_data_path)
 
-    brain_dataset = ExcelDataset(data_path, device="cpu")
-    print(brain_dataset[10])
-    lam, P, i1, i2, F, exp_type =    brain_dataset[10]
-    print(F)
-    # data = brain_dataset.data
+    # Load the first sheet
+    df_sheet1 = pd.read_excel(xls, sheet_name='Sheet1')
 
-    # lam, F, features, target = data
-    # print(type(lam))
+    # Clean the first sheet by removing unnecessary rows and renaming columns
+    df_sheet1_cleaned = df_sheet1.iloc[3:].reset_index(drop=True)
 
-    # f = brain_dataset.features
-    # t = brain_dataset.target
-    #
-    # print(t)
+    # Keep only the relevant columns and rename them
+    relevant_columns = df_sheet1_cleaned.iloc[:, :4]
+    relevant_columns.columns = ['stretch', 'stress_ut', 'gamma', 'stress_ss']
+    brain_data = relevant_columns
 
-    # F = F_tc(0.9)
-    # C = F.t() @ F
-    # print(C)
-    # print(np.linalg.eigvals(C))
+    dataset = BrainDataset(brain_data)
 
-    # print(a.t().inverse())
-    # print(a.dim())
-    # print(b)
-    # print(b.dim())
-
+    print(dataset[1])
 """
 TODO:
 1) реализовать метод __str__ в зависимости от предоставлемых данных
