@@ -134,19 +134,21 @@ class BrainDataset(Dataset):
         Gamma = torch.tensor(self.data.iloc[idx]['gamma'], dtype=torch.float32)
         Stress_UT = torch.tensor(self.data.iloc[idx]['stress_ut'], dtype=torch.float32)
         Stress_SS = torch.tensor(self.data.iloc[idx]['stress_ss'], dtype=torch.float32)
-        return Stretch, Gamma, Stress_UT, Stress_SS
+        weight_ut = torch.tensor(self.data.iloc[idx]['weight_ut'], dtype=torch.float32)
+        weight_ss = torch.tensor(self.data.iloc[idx]['weight_ss'], dtype=torch.float32)
+        return Stretch, Gamma, Stress_UT, Stress_SS, weight_ut, weight_ss
 
-
-    def __getitem__(self, idx):
-        all_items = [*self.data.iloc[idx]]
-        features = all_items[0], all_items[2]
-        target = all_items[1], all_items[3]
-        # target = values.pop(1)
-        # features = values.remove(target)
-
-        # if self.transform:
-        #     features, target = self.transform(features, target)
-        return features, target
+    # def __getitem__(self, idx):
+    #     all_items = [*self.data.iloc[idx]]
+    #     features = torch.tensor([all_items[0], all_items[2], all_items[4], all_items[5]],
+    #                             dtype=torch.float32, requires_grad=True)
+    #     target = torch.tensor([all_items[1], all_items[3]], dtype=torch.float32)
+    #     # target = values.pop(1)
+    #     # features = values.remove(target)
+    #
+    #     # if self.transform:
+    #     #     features, target = self.transform(features, target)
+    #     return features, target
 
 
 if __name__ == "__main__":
@@ -164,9 +166,17 @@ if __name__ == "__main__":
     relevant_columns.columns = ['stretch', 'stress_ut', 'gamma', 'stress_ss']
     brain_data = relevant_columns
 
+    weight_u_value = 0.5
+    weight_t_value = 0.5
+    weight_ss_value = 1.
+
+    brain_data['weight_ut'] = [weight_u_value] * (len(brain_data) // 2) + [weight_t_value] * (len(brain_data) - len(brain_data) // 2)
+    brain_data['weight_ss'] = weight_ss_value
+
     dataset = BrainDataset(brain_data)
 
-    print(dataset[1])
+    print(dataset.data.columns)
+    print(dataset[10])
 """
 TODO:
 1) реализовать метод __str__ в зависимости от предоставлемых данных
