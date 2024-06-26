@@ -67,11 +67,40 @@ class Trainer:
             self.model.load_state_dict(torch.load(checkpoint))
 
     def train(self,
-              train_loader=Optional[DataLoader],
-              test_loader=Optional[DataLoader],
-              weighting_data=True):
-        # Initialize the model, loss function, and optimizer
+              train_loader: Optional[DataLoader],
+              test_loader: Optional[DataLoader] = None,
+              weighting_data: bool = True,
+              train_mode: str = "one_mode"):
+        """
+        Trains the model using the provided training and testing data loaders.
 
+        Parameters:
+        -----------
+        train_loader : Optional[DataLoader]
+            DataLoader containing the training data.
+        test_loader : Optional[DataLoader], optional
+            DataLoader containing the testing/validation data. If None, validation is not performed (default is None).
+        weighting_data : bool, optional
+            If True, applies different weights to the loss based on experiment type (default is True).
+        train_mode : str, optional
+            Determines the training mode. Options are "one_mode" and "multiple_mode" (default is "one_mode").
+
+        Returns:
+        --------
+        model : nn.Module
+            The trained model.
+
+        Notes:
+        ------
+        - If `self.experiment_name` is provided, the model weights are saved in a directory named after the experiment.
+        - Uses Mean Squared Error (MSE) loss for training.
+        - Applies L1 and L2 regularization if coefficients are provided.
+        - Clamps the model weights to ensure non-negativity.
+        - Plots the training loss over epochs.
+        - Saves the best model weights based on validation loss.
+        """
+
+        # Initialize the model, loss function, and optimizer
         if self.experiment_name is not None:
             path_to_save_weights = os.path.join("pretrained_models", self.experiment_name)
             if not os.path.exists(path_to_save_weights):
@@ -90,7 +119,7 @@ class Trainer:
         else:
             test_data_count = len(test_loader)
         def train_one_epoch(epoch_index):
-            running_loss = 0.
+            epoch_loss = 0.
             last_loss = 0.
 
             for i, data in enumerate(train_loader):
@@ -126,9 +155,9 @@ class Trainer:
                 self.model.clamp_weights()
 
                 # last_loss = loss.item()
-                running_loss += loss.item()
+                epoch_loss += loss.item()
 
-            return running_loss
+            return epoch_loss
 
         epoch_number = 0
         best_vloss = torch.inf
