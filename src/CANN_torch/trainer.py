@@ -8,7 +8,7 @@ import os
 import matplotlib.pyplot as plt
 from typing import Optional
 from sklearn.metrics import r2_score
-from models.CNN_gpt import *
+from models.CNN import *
 # from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C, StrainEnergyCANN_polinomial3
 from utils.dataload import ExcelDataset, normalize_data
 from utils.visualisation import *
@@ -53,9 +53,13 @@ class Trainer:
 
         self.l1_reg_coeff = l1_reg_coeff
         self.l2_reg_coeff = l2_reg_coeff
+
         self.model = model(batch_size, device=device, dtype=dtype)
-        self.device = device
         self.learning_rate = learning_rate
+        self.loss_fn = nn.MSELoss()
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+
+        self.device = device
         self.epochs = epochs
         self.experiment_name = experiment_name
         self.plot_valid = plot_valid
@@ -80,8 +84,8 @@ class Trainer:
             else:
                 print(f"Directory {path_to_save_weights} already exists")
 
-        loss_fn = nn.MSELoss()
-        optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.loss_fn = nn.MSELoss()
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
         train_data_count = len(train_loader)
 
@@ -97,10 +101,16 @@ class Trainer:
                 features, target = data
                 _, _, _, _, exp_type = features
 
-                optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 stress_model = self.model(features)
 
-                loss = loss_fn(stress_model, target)
+                if exp_type == "Biaxial":
+                #     loss_x = self.loss_fn(stress_model[0], target[0])
+                #     loss_y = self.loss_fn(stress_model[1], target[1])
+                #     loss = loss_x + loss_y
+                    loss = self.loss_fn(stress_model[0], target[0])
+                else:
+                    loss = self.loss_fn(stress_model, torch.tensor(target))
                 if weighting_data:
                     if exp_type == "Compression":
                         loss *= 0.5
@@ -118,7 +128,7 @@ class Trainer:
                 loss.backward(retain_graph=True)
                 # loss.backward()
 
-                optimizer.step()
+                self.optimizer.step()
 
                 # turn negative weights to zero
                 self.model.clamp_weights()
@@ -148,11 +158,12 @@ class Trainer:
                 # running_vloss = self.test(test_loader)
                 for i, vdata in enumerate(test_loader):
                     vfeatures, vtarget = vdata
+                    _, _, _, _, exp_type = vfeatures
 
-                    optimizer.zero_grad()
-                    # stress_model = self.model(vfeatures)
+                    self.optimizer.zero_grad()
                     vstress = self.model(vfeatures)
-                    vloss = loss_fn(vtarget, vstress)
+
+                    vloss = self.loss_fn(torch.tensor(vtarget), vstress)
                     running_vloss += vloss
 
                 avg_vloss = running_vloss / test_data_count
@@ -188,7 +199,7 @@ class Trainer:
                 torch.save(self.model.state_dict(), path_to_save_weights)
 
 
-        plt.plot(loss_history)
+        plt.plot(np.log(loss_history))
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.title('Training Loss')
@@ -222,48 +233,45 @@ class Trainer:
         - val_loader (DataLoader): DataLoader object for validation data.
         """
         self.model.eval()
-        val_loss = 0.0
-        for data in val_loader:
 
-            inputs, labels = data
-            inputs, labels = inputs, labels
+        running_loss = 0.
+        last_loss = 0.
 
-            outputs = self.model(inputs)
-            loss = nn.MSELoss()(outputs, labels)
-            val_loss += loss.item()
+        for i, data in enumerate(val_loader):
+            features, target = data
+            _, _, _, _, exp_type = features
 
-        # print(f'Validation loss: {val_loss / len(val_loader):.3f}')
+            optimizer.zero_grad()
+            stress_model = self.model(features)
+
+            loss = loss_fn(stress_model, target)
+            if weighting_data:
+                if exp_type == "Compression":
+                    loss *= 0.5
+                elif exp_type == "Tensile":
+                    loss *= 1.5
+
+            if self.l2_reg_coeff is not None:
+                l2_reg = self.model.calc_regularization(2)
+                loss += 0.5 * self.l2_reg_coeff * l2_reg
+
+            if self.l2_reg_coeff is not None:
+                l1_reg = self.model.calc_l1()
+                loss += self.l1_reg_coeff * l1_reg
+
+            loss.backward(retain_graph=True)
+            # loss.backward()
+
+            optimizer.step()
+
+            # turn negative weights to zero
+            self.model.clamp_weights()
+
+            # last_loss = loss.item()
+            running_loss += loss.item()
+
         self.model.train()  # Return model to training mode
         return val_loss
-
-    def load_data(self,
-                  path_to_exp_names: str,
-                  transform: Optional[object] = normalize_data,
-                  shuffle: bool = True,
-                  length_start: Optional[int] = None,
-                  length_end: Optional[int] = None
-                  ):
-
-        dataset = ExcelDataset(
-                           path=path_to_exp_names,
-                           transform=transform,
-                           device=self.device,
-                           batch_size=self.batch_size
-        )
-
-        dataset.to_tensor()
-        if length_end is not None:
-            dataset.data = dataset.data[length_start:length_end]
-
-        dataset_loader = DataLoader(
-                                dataset,
-                                batch_size=self.batch_size,
-                                shuffle=shuffle,
-                                num_workers=1,
-                                pin_memory=False
-        )
-
-        return dataset_loader
 
     def visualize_predictions(self, data: pd.DataFrame):
         """
@@ -350,5 +358,9 @@ def main():
     plt.legend()
     plt.show()
 
+def latex():
+
+
 if __name__ == "__main__":
-    main()
+    # main()
+    latex()
