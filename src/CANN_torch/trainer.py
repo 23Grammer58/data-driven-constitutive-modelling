@@ -15,6 +15,8 @@ from utils.visualisation import *
 import seaborn as sns
 import pandas as pd
 
+from models.CANN_gpt import *
+
 def r2_score_own(Truth, Prediction):
     R2 = r2_score(Truth,Prediction)
     return max(R2,0.0)
@@ -53,7 +55,11 @@ class Trainer:
 
         self.l1_reg_coeff = l1_reg_coeff
         self.l2_reg_coeff = l2_reg_coeff
-        self.model = model(batch_size, device=device, dtype=dtype)
+        if model == ModelArchitecture_I5:
+            psi_model = StrainEnergy_i5()
+            self.model = model(psi_model, setAl=True, init=torch.pi / 4)
+        else:
+            self.model = model(batch_size, device=device, dtype=dtype)
         self.device = device
         self.learning_rate = learning_rate
         self.epochs = epochs
@@ -109,7 +115,7 @@ class Trainer:
             else:
                 print(f"Directory {path_to_save_weights} already exists")
 
-        loss_fn = nn.MSELoss()
+        loss_fn = nn.MSELoss(reduction='none')
         optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
         train_data_count = len(train_loader)
@@ -131,7 +137,15 @@ class Trainer:
                 # print(target)
                 # print(stress_model)
                 # print(i1, i2, i4, i5)
-                loss = loss_fn(stress_model, target)
+                # target = target.squeeze()
+                # loss = loss_fn(stress_model, target)
+                # loss = loss.sum()
+
+
+                loss_xx = loss_fn(stress_model.T[0], target.T[0])
+                loss_yy = loss_fn(stress_model.T[1], target.T[1])
+                loss = loss_xx + loss_yy
+                loss = loss.sum()
                 if weighting_data:
                     if exp_type == "Compression":
                         loss *= 0.5
@@ -176,6 +190,8 @@ class Trainer:
 
             # validation = False
             if test_loader:
+                self.model.train(False)
+
                 # running_vloss = self.test(test_loader)
                 for i, vdata in enumerate(test_loader):
                     vfeatures, vtarget = vdata
@@ -341,42 +357,53 @@ class Trainer:
 
 
 def main():
-    data_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\data\braid_bade\CANNsBRAINdata.xlsx"
-    best_model_path = r"C:\Users\Biomechanics\PycharmProjects\dd\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\FIRST_weights\20240516_194300_147.pth"
-    test_train = Trainer(
-        plot_valid=False,
-        epochs=10,
-        experiment_name="FIRST_weights",
-        l2_reg_coeff=0.01,
-        learning_rate=0.001,
-        checkpoint=None,
+    path_to_data = r"..\..\data\GoreTex"
 
-    )
+    def get_list_of_paths_to_experiments_type(experiment="uniaxial"):
+        experiment_type_path = os.path.join(path_to_data, experiment)
+        l = []
+        for file in os.listdir(experiment_type_path):
+            l.append(os.path.join(experiment_type_path, file))
+        return l
 
-    train_data_loader = test_train.load_data(data_path, transform=None)
-    test_data_loader = test_train.load_data(data_path, transform=None, shuffle=False)
-    trained_model = test_train.train(train_data_loader, test_data_loader, weighting_data=False)
-    # trained_model = StrainEnergyCANN_C()
-    # trained_model.load_state_dict(torch.load(best_model_path))
-    trained_model.eval()
-    vpredictions = []
-    vtargets = []
-    for data in test_data_loader:
-        features, target = data
-        # if features[-1] == 1.5:
-        vpredictions.append(trained_model(features).detach().numpy())
-        vtargets.append(target.detach().numpy())
-    print(trained_model.get_potential())
-    print(r2_score_own(vtargets, vpredictions))
-    plt.figure(figsize=(10, 5))
-    plt.plot(vpredictions, label='P_pred', color='red')
-    plt.plot(vtargets, label='P_true', color='black')
-    plt.xlabel('lambda/gamma')
-    plt.ylabel('P')
-    plt.title('Predictions vs. Targets')
-    plt.legend()
-    plt.show()
+    def load_and_extract(file_path, experiment_type):
+        df = pd.read_csv(file_path)
+        df['experiment_type'] = experiment_type
+        return df[['lambda_clamps_X', 'lambda_clamps_Y', 'mean_stress_x_mpa', 'mean_stress_y_mpa', 'experiment_type']]
 
+    get_list_of_paths_to_experiments_type("biaxial")
+
+    experiment = "biaxial"
+    experiments_path = get_list_of_paths_to_experiments_type(experiment)
+    data_frames = [load_and_extract(file, file[-11:-4]) for file in experiments_path]
+
+    # print(data_frames)
+
+    df = pd.concat(data_frames, ignore_index=True)
+    thinned_data_frames = []
+    num_points = -1
+
+    df_list = []
+
+    for df in data_frames:
+        if num_points != -1:
+            indices = np.linspace(10, len(df) - 1, num_points, dtype=int)
+            # df[1] = df[1] / 10**6
+            df = pd.DataFrame(df.iloc[indices].copy())
+        # print(type(sampled_df))
+        df['lambdas'] = list(zip(df['lambda_clamps_X'], df['lambda_clamps_Y']))
+        df['stresses'] = list(zip(df['mean_stress_x_mpa'], df['mean_stress_y_mpa']))
+        df_list.append(df[:50])
+        # df_list.append(df)
+        # thinned_df = df.iloc[::len(df) // 20, :]  # Выбор каждого 45-го значения
+        # thinned_data_frames.append(thinned_df)
+    data_frames = df_list
+    # df.iloc[40:60]
+    print(df_list[1])
+    # thinned_data_frames
+    # sampled_df_list[0]
+    # for item in data_frames:
+    # print(item)
 
 if __name__ == "__main__":
     main()
