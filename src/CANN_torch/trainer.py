@@ -34,7 +34,8 @@ class Trainer:
                  batch_size: int = 1,
                  l1_reg_coeff: Optional[float] = 0.001,
                  l2_reg_coeff: Optional[float] = 0.001,
-                 dtype = torch.float32
+                 dtype = torch.float32,
+                 initial_weight = 2.0
                  ):
         """
         Класс для обучения CANN моделей.
@@ -57,7 +58,7 @@ class Trainer:
         self.l2_reg_coeff = l2_reg_coeff
         if model == ModelArchitecture_I5:
             psi_model = StrainEnergy_i5()
-            self.model = model(psi_model, setAl=True, init=torch.pi / 4)
+            self.model = model(psi_model, setAl=True, init=torch.pi / 4, initial_weight=initial_weight)
         else:
             self.model = model(batch_size, device=device, dtype=dtype)
         self.device = device
@@ -161,8 +162,11 @@ class Trainer:
                     loss += self.l1_reg_coeff * l1_reg
 
                 loss.backward(retain_graph=True)
-                # loss.backward()
-
+                # loss.back
+                # ward()
+                # for name, param in self.model.named_parameters():
+                #     if param.grad is not None:
+                #         print(f'{name}: {param.grad.norm()}')
                 optimizer.step()
 
                 # turn negative weights to zero
@@ -177,14 +181,12 @@ class Trainer:
         best_vloss = torch.inf
         loss_history = []
         best_epoch = 0
-        # vlosses = []
-        # vpredictions = []
-        # vtargets = []
 
         # Training the model
         for epoch in range(self.epochs):
             self.model.train(True)
             avg_loss = train_one_epoch(epoch_number) / train_data_count
+            # scheduler.step()
 
             running_vloss = 0.0
 
@@ -208,26 +210,34 @@ class Trainer:
 
             # print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
-            print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
+            # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
             # print("psi = ", self.model.get_potential())
             if avg_vloss < best_vloss:
                 best_epoch = epoch
-                print("------------------------------------------------------------------")
-                print("psi = ", self.model.get_potential())
+                # print("psi = ", self.model.get_potential())
+                # print("------------------------------------------------------------------")
                 best_vloss = avg_vloss
 
-            if epoch - best_epoch > 50 and best_vloss - avg_vloss < 10e-2: break
+            if epoch - best_epoch > 200 and best_vloss - avg_vloss < 10e-2: break
 
-            # elif epoch % 100 == 0:
+            elif epoch % 1000 == 0:
+                print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
+                print("psi = ", self.model.get_potential())
+                print("------------------------------------------------------------------")
+
             #     print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
             #     # print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}')
-            #     # model_path = '{}_{}'.format(self.timestamp, epoch)
+            #     model_path = '{}_{}'.format(self.timestamp, epoch)
+            #     print(epoch)
+            #     print(self.model.state_dict().values())
+            #     print(self.model.get_potential())
+            #     print()
             #     # path_to_save_weights = os.path.join(self.path_to_save_weights, model_path + ".pth")
             #     # print(f"Saved PyTorch Model State to {path_to_save_weights}")
             #     # torch.save(self.model.state_dict(), path_to_save_weights)
             #     print("psi = ", self.model.get_potential())
-            if epoch == (epochs - 1):
-                print("psi = ", self.model.get_potential())
+            # if epoch == (epochs - 1):
+            #     print("psi = ", self.model.get_potential())
             loss_history.append(avg_loss)
             # epoch_number += 1
 
@@ -279,131 +289,8 @@ class Trainer:
         self.model.train()  # Return model to training mode
         return val_loss
 
-    def load_data(self,
-                  path_to_exp_names: str,
-                  transform: Optional[object] = normalize_data,
-                  shuffle: bool = True,
-                  length_start: Optional[int] = None,
-                  length_end: Optional[int] = None
-                  ):
-
-        dataset = ExcelDataset(
-                           path=path_to_exp_names,
-                           transform=transform,
-                           device=self.device,
-                           batch_size=self.batch_size
-        )
-
-        dataset.to_tensor()
-        if length_end is not None:
-            dataset.data = dataset.data[length_start:length_end]
-
-        dataset_loader = DataLoader(
-                                dataset,
-                                batch_size=self.batch_size,
-                                shuffle=shuffle,
-                                num_workers=1,
-                                pin_memory=False
-        )
-
-        return dataset_loader
-
-    def visualize_predictions(self, data: pd.DataFrame):
-        """
-        Visualize dataset and predictions.
-
-        Parameters:
-        - experiment_col (str): The column name for the experiment identifier.
-        - x_col (int or str): The column name or index for the x-axis data.
-        - y_col (int or str): The column name or index for the y-axis data.
-        """
-        self.model.eval()
-        vpredictions = []
-        vtargets = []
-        for data in test_data_loader:
-            features, target = data
-            vpredictions.append(trained_model(features).detach().numpy())
-        print(trained_model.get_potential())
-        combined_data["P_model"] = vpredictions
 
 
-        # Преобразуем столбец с предсказанной силой в числовой формат
-        data['P_model'] = data['P_model'].apply(lambda x: float(str(x).strip('[]')))
-
-        # Создадим графики для каждого типа эксперимента
-        experiment_types = data['experiment_type'].unique()
-
-        def plot_with_r2(data, experiment_types):
-            r2_scores = []
-            fig, axes = plt.subplots(1, len(experiment_types), figsize=(15, 6), sharey=True)
-
-            for ax, experiment in zip(axes, experiment_types):
-                subset = data[data['experiment_type'] == experiment]
-                r2 = r2_score(subset['P_experimental'], subset['P_model'])
-
-                sns.scatterplot(data=subset, x='lambda', y='P_experimental', label='P_experimental', ax=ax)
-                sns.lineplot(data=subset, x='lambda', y='P_model', label='P_model', color='orange', ax=ax)
-                ax.set_title(f'Experiment Type: {experiment}\nR² = {r2:.2f}')
-                ax.set_xlabel('Strain')
-                ax.set_ylabel('Force (kPa)')
-                r2_scores.append(r2)
-
-            plt.tight_layout()
-            plt.show()
-            return r2_scores
-
-        # Вызовем функцию для построения графиков с r2
-        plot_with_r2(data, experiment_types)
-
-
-def main():
-    path_to_data = r"..\..\data\GoreTex"
-
-    def get_list_of_paths_to_experiments_type(experiment="uniaxial"):
-        experiment_type_path = os.path.join(path_to_data, experiment)
-        l = []
-        for file in os.listdir(experiment_type_path):
-            l.append(os.path.join(experiment_type_path, file))
-        return l
-
-    def load_and_extract(file_path, experiment_type):
-        df = pd.read_csv(file_path)
-        df['experiment_type'] = experiment_type
-        return df[['lambda_clamps_X', 'lambda_clamps_Y', 'mean_stress_x_mpa', 'mean_stress_y_mpa', 'experiment_type']]
-
-    get_list_of_paths_to_experiments_type("biaxial")
-
-    experiment = "biaxial"
-    experiments_path = get_list_of_paths_to_experiments_type(experiment)
-    data_frames = [load_and_extract(file, file[-11:-4]) for file in experiments_path]
-
-    # print(data_frames)
-
-    df = pd.concat(data_frames, ignore_index=True)
-    thinned_data_frames = []
-    num_points = -1
-
-    df_list = []
-
-    for df in data_frames:
-        if num_points != -1:
-            indices = np.linspace(10, len(df) - 1, num_points, dtype=int)
-            # df[1] = df[1] / 10**6
-            df = pd.DataFrame(df.iloc[indices].copy())
-        # print(type(sampled_df))
-        df['lambdas'] = list(zip(df['lambda_clamps_X'], df['lambda_clamps_Y']))
-        df['stresses'] = list(zip(df['mean_stress_x_mpa'], df['mean_stress_y_mpa']))
-        df_list.append(df[:50])
-        # df_list.append(df)
-        # thinned_df = df.iloc[::len(df) // 20, :]  # Выбор каждого 45-го значения
-        # thinned_data_frames.append(thinned_df)
-    data_frames = df_list
-    # df.iloc[40:60]
-    print(df_list[1])
-    # thinned_data_frames
-    # sampled_df_list[0]
-    # for item in data_frames:
-    # print(item)
 
 if __name__ == "__main__":
     main()

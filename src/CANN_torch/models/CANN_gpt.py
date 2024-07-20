@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from potential_zoo import get_psi
+from models.potential_zoo import get_psi
 
 
 def flatten(l):
@@ -138,25 +138,33 @@ class H_Layer_FungBiax_I4I5(nn.Module):
     def forward(self, lam):
         # lamx, lamy = lam.split(1)
         lamx, lamy = lam.split(1, dim=1)
-        al = F.relu(self.alpha)
+        # al = F.relu(self.alpha)
+        al = torch.pi / torch.tensor(4.)
+        h11_i4 = lamx**2 * (torch.cos(al) ** 2)
+        h22_i4 = lamy**2 * (torch.sin(al) ** 2)
 
-        h11_i4 = lamx * (torch.cos(al) ** 2)
-        h22_i4 = lamy * (torch.sin(al) ** 2)
-
-        h11_i5 = (lamx ** 3) * (torch.cos(al) ** 2)
-        h22_i5 = (lamy ** 3) * (torch.sin(al) ** 2)
+        h11_i5 = (lamx ** 4) * (torch.cos(al) ** 2)
+        h22_i5 = (lamy ** 4) * (torch.sin(al) ** 2)
 
         return h11_i4, h22_i4, h11_i5, h22_i5
 
 
 # Complete model architecture definition
 class ModelArchitecture_I5(nn.Module):
-    def __init__(self, Psi_model, setAl, init):
+    def __init__(self, Psi_model, setAl, init, initial_weight=1.0):
         super(ModelArchitecture_I5, self).__init__()
         self.Psi_model = Psi_model
         self.H_layer = H_Layer_FungBiax_I4I5('alpha', setAl, init)
         self.potential_constants = None
         self.terms_count = Psi_model.terms_count
+
+        for layer in self.modules():
+            classname = layer.__class__.__name__
+
+            if classname.find('Linear') != -1:
+                # get the number of the inputs
+                torch.nn.init.uniform_(layer.weight, a=0.01, b=initial_weight)
+                layer.weight.data = torch.clamp(layer.weight.data, min=0)
 
 
     def forward(self, inputs):
@@ -184,6 +192,7 @@ class ModelArchitecture_I5(nn.Module):
         #     (dWI1_BT, dWdI2_BT, dWdI4_BT, dWdI5_BT, Stretch_x, Stretch_z, I1_BT, h11, h11_i5))
         # Stress_yy_BT = Stress_xx_I5_BT(
         #     (dWI1_BT, dWdI2_BT, dWdI4_BT, dWdI5_BT, Stretch_y, Stretch_z, I1_BT, h22, h22_i5))
+        self.get_weights()
         return stress_calc_bx((dWI1_BT, dWdI2_BT, dWdI4_BT, dWdI5_BT, Stretch_x, Stretch_y))
         # return torch.cat((Stress_xx_BT, Stress_yy_BT), dim=1)
 
@@ -194,20 +203,14 @@ class ModelArchitecture_I5(nn.Module):
             if "I" in k:
                 w1.append(self.state_dict()[k].squeeze().item())
             elif "final" in k:
-                w2 = self.state_dict()[k].squeeze().numpy()
-        self.potential_constants =  np.array([np.array(w1), w2])
+                w2 = self.state_dict()[k].squeeze()
+        self.potential_constants =  torch.tensor([w1, w2])
 
-    def get_potential(self, p=10):
+    def get_potential(self, p=3):
 
         if self.potential_constants is None:
             self.get_weights()
-            # self.potential_constants = torch.tensor(flatten(flatten(self.state_dict().values()))).view(
-            #     self.Psi_model.invariants_count, self.Psi_model.all_terms)
-            # for value in self.state_dict().values():
-            # for value in self.state_dict().values():
-            #     print(flatten(value.squeeze()))
-            # self.potential_constants = torch.tensor(self.state_dict().values()).view(
-            #     self.Psi_model.invariants_count, self.Psi_model.all_terms)
+
         w = self.potential_constants
         potential_str = get_psi(w, terms=self.Psi_model.all_terms_count, p=p)
         return potential_str
@@ -216,6 +219,17 @@ class ModelArchitecture_I5(nn.Module):
         with torch.no_grad():
             for param in self.parameters():
                 param.clamp_(min=0)
+
+    def calc_regularization(self, l=2):
+        """
+
+        :param l: power
+        :return: sum of potential coefficients to the power of p
+        """
+        return torch.sum(self.potential_constants ** l)
+
+    def calc_l1(self):
+        return torch.sum(torch.abs(self.potential_constants))
 # Example usage
 # psi_model = StrainEnergy_i5()  # Initialize your Psi model here
 # model = ModelArchitecture_I5(psi_model, setAl=True, init=0.1)
