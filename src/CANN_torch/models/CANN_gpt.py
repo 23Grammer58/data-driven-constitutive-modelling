@@ -28,9 +28,12 @@ class SingleInvNet4(nn.Module):
 
         self.terms_count = 4
         self.bias = bias
-        # nn.init.constant_(self.layer1.weight, 0.1)
+        nn.init.uniform_(self.layer1.weight, 0.01, 1.0)
+        nn.init.uniform_(self.layer2.weight, 0.01, 0.1)
+        nn.init.uniform_(self.layer3.weight, 0.01, 1.0)
+        nn.init.uniform_(self.layer4.weight, 0.01, 0.1)
         # nn.init.constant_(self.layer2.weight, 0.1)
-        # nn.init.constant_(self.layer3.weight, 0.1)
+        # nn.init.constant_(self.layer3.weight, 1.0)
         # nn.init.constant_(self.layer4.weight, 0.1)
 
     def forward(self, I_in):
@@ -63,6 +66,10 @@ class StrainEnergy_i5(nn.Module):
 
         self.invariants = torch.zeros(self.invariants_count)
         self.final_layer = nn.Linear(self.all_terms_count, 1, bias=False)
+        # nn.init.constant_(self.final_layer.weight, 1.0)
+        nn.init.uniform_(self.final_layer.weight, 0.01, 1.0)
+
+
         # nn.init.xavier_normal_(self.final_layer.weight)
 
     def forward(self, I1_ref, I2_ref, I4_ref, I5_ref):
@@ -105,7 +112,7 @@ def Stress_xx_I5_BT(inputs):
 
 
 def stress_calc_bx(inputs):
-    dPsidI1, dPsidI2, dPsidI4, dPsidI5, Stretch1, Stretch2 = inputs
+    dPsidI1, dPsidI2, dPsidI4, dPsidI5, Stretch1, Stretch2, al = inputs
 
     one = torch.tensor(1.0, dtype=torch.float32)
     two = torch.tensor(2.0, dtype=torch.float32)
@@ -116,13 +123,13 @@ def stress_calc_bx(inputs):
     # stress = two * (dPsidI1 * Stretch + dPsidI2 * one) - minus
     first_11 = (Stretch1 - one / (Stretch1**two * Stretch2**two))
     second_11 = (Stretch1 * Stretch2**two + one / (Stretch1 * Stretch2**two) - one / (Stretch1**two) - one / (Stretch2**two))
-    fourth_11 = Stretch1 * torch.cos(torch.pi / four)**two
-    fifth_11 = Stretch1**three * torch.cos(torch.pi / four)**two
+    fourth_11 = Stretch1 * torch.cos(al)**two
+    fifth_11 = Stretch1**three * torch.cos(al)**two
 
     first_22 = (Stretch2 - one / (Stretch1**two * Stretch2**two))
     second_22 = (Stretch1**two * Stretch2 + one / (Stretch1 ** two * Stretch2) - one / (Stretch1**two) - one / (Stretch2**two))
-    fourth_22 = Stretch2 * torch.sin(torch.pi / four) ** two
-    fifth_22 = Stretch2**three * torch.sin(torch.pi / four) ** two
+    fourth_22 = Stretch2 * torch.sin(al) ** two
+    fifth_22 = Stretch2**three * torch.sin(al) ** two
 
     P11 = two * (first_11 * dPsidI1 + second_11 * dPsidI2 + fourth_11 * dPsidI4 + two * fifth_11 * dPsidI5)
     P22 = two * (first_22 * dPsidI1 + second_22 * dPsidI2 + fourth_22 * dPsidI4 + two * fifth_22 * dPsidI5)
@@ -138,33 +145,33 @@ class H_Layer_FungBiax_I4I5(nn.Module):
     def forward(self, lam):
         # lamx, lamy = lam.split(1)
         lamx, lamy = lam.split(1, dim=1)
-        # al = F.relu(self.alpha)
-        al = torch.pi / torch.tensor(4.)
+        al = F.relu(self.alpha)
+        # al = torch.pi / torch.tensor(4.)
         h11_i4 = lamx**2 * (torch.cos(al) ** 2)
         h22_i4 = lamy**2 * (torch.sin(al) ** 2)
 
         h11_i5 = (lamx ** 4) * (torch.cos(al) ** 2)
         h22_i5 = (lamy ** 4) * (torch.sin(al) ** 2)
 
-        return h11_i4, h22_i4, h11_i5, h22_i5
+        return h11_i4, h22_i4, h11_i5, h22_i5, al
 
 
 # Complete model architecture definition
 class ModelArchitecture_I5(nn.Module):
-    def __init__(self, Psi_model, setAl, init, initial_weight=1.0):
+    def __init__(self, Psi_model, setAl, init, initial_weight=0.1):
         super(ModelArchitecture_I5, self).__init__()
         self.Psi_model = Psi_model
         self.H_layer = H_Layer_FungBiax_I4I5('alpha', setAl, init)
         self.potential_constants = None
         self.terms_count = Psi_model.terms_count
 
-        for layer in self.modules():
-            classname = layer.__class__.__name__
-
-            if classname.find('Linear') != -1:
-                # get the number of the inputs
-                torch.nn.init.uniform_(layer.weight, a=0.01, b=initial_weight)
-                layer.weight.data = torch.clamp(layer.weight.data, min=0)
+        # for layer in self.modules():
+        #     classname = layer.__class__.__name__
+        #
+        #     if classname.find('Linear') != -1:
+        #         # get the number of the inputs
+        #         torch.nn.init.uniform_(layer.weight, a=0.01, b=initial_weight)
+        #         layer.weight.data = torch.clamp(layer.weight.data, min=0)
 
 
     def forward(self, inputs):
@@ -176,7 +183,7 @@ class ModelArchitecture_I5(nn.Module):
         I1_BT = Stretch_x ** 2 + Stretch_y ** 2 + Stretch_z ** 2
         I2_BT = (Stretch_x ** 2) * (Stretch_y ** 2) + 1 / Stretch_x ** 2 + 1 / Stretch_y ** 2
 
-        h11, h22, h11_i5, h22_i5 = self.H_layer(torch.cat((Stretch_x, Stretch_y), dim=1))
+        h11, h22, h11_i5, h22_i5, al = self.H_layer(torch.cat((Stretch_x, Stretch_y), dim=1))
         # h11, h22, h11_i5, h22_i5 = self.H_layer(torch.cat((Stretch_x, Stretch_y)))
         I4_BT = h11 + h22
         I5_BT = h11_i5 + h22_i5
@@ -193,7 +200,7 @@ class ModelArchitecture_I5(nn.Module):
         # Stress_yy_BT = Stress_xx_I5_BT(
         #     (dWI1_BT, dWdI2_BT, dWdI4_BT, dWdI5_BT, Stretch_y, Stretch_z, I1_BT, h22, h22_i5))
         self.get_weights()
-        return stress_calc_bx((dWI1_BT, dWdI2_BT, dWdI4_BT, dWdI5_BT, Stretch_x, Stretch_y))
+        return stress_calc_bx((dWI1_BT, dWdI2_BT, dWdI4_BT, dWdI5_BT, Stretch_x, Stretch_y, al))
         # return torch.cat((Stress_xx_BT, Stress_yy_BT), dim=1)
 
     def get_weights(self):
