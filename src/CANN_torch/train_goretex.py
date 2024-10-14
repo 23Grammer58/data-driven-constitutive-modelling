@@ -19,7 +19,7 @@ import pandas as pd
 from trainer import Trainer
 
 # hyperparameters and paths
-path_to_data = r"..\..\data\GoreTex"
+path_to_data = r"..\..\data\GoreTex\1"
 experiment_mod = "biaxial"
 num_points = 32
 batch_size = 2
@@ -93,8 +93,8 @@ def preproc_data(experiment_mod="biaxial"):
     combined_data.pop("stresses")
     experiment_mod = combined_data.pop("experiment_type")
     combined_data["experiment_type"] = experiment_mod
-    combined_data["mean_stress_y_mpa"][combined_data["mean_stress_x_mpa"] < 0] = 1e-5
-    combined_data["mean_stress_y_mpa"][combined_data["mean_stress_y_mpa"] < 0] = 1e-5
+    # combined_data["mean_stress_y_mpa"][combined_data["mean_stress_x_mpa"] < 0] = 1e-5
+    # combined_data["mean_stress_y_mpa"][combined_data["mean_stress_y_mpa"] < 0] = 1e-5
 
     # combined_data["mean_stress_x_mpa"].loc[combined_data["mean_stress_x_mpa"] < 0] = 1e-5
     # combined_data["mean_stress_y_mpa"].loc[combined_data["mean_stress_y_mpa"] < 0] = 1e-5
@@ -147,7 +147,10 @@ def init_loaders(all_data=None, experiment_type: Optional[str] or Optional[list]
 
     train_dataset.to_tensor()
     test_dataset.to_tensor()
-
+    f, t = train_dataset[10]
+    # print(train_dataset[10])
+    print("f:", f)
+    print("t:", t)
     train_data_loader = DataLoader(
         train_dataset,
         shuffle=True,
@@ -221,7 +224,7 @@ def plot_results_by_experiment_type(data: pd.DataFrame, path_to_save: str, plot_
 
 def main():
 
-    # experiments = [["100_100", '100_050', "100_075", "100_033"]]
+    experiments_all = [["100_100", '100_050', "100_075", "100_033", '050_100', "075_100", "033_100"]]
     experiments =\
         [
             ["100_050"],
@@ -235,7 +238,7 @@ def main():
 
     for model in models:
 
-        for idx, experiment in enumerate(experiments):
+        for idx, experiment in enumerate(experiments_all):
             train_data_loader, test_data_loader = init_loaders(dataframe, experiment)
             name = "GoreTex_" + str(experiment) + "_" + str(model.__name__)
             print("----------------------------------------------------------------------")

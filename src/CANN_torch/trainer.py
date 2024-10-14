@@ -29,13 +29,13 @@ class Trainer:
                  model: nn.Module = StrainEnergyCANN_Ani,
                  device: Optional[str] = "cpu",
                  learning_rate: float = 0.001,
-                 epochs: int = 100,
+                 epochs: int = 1000,
                  plot_valid: bool = False,
                  batch_size: int = 1,
                  l1_reg_coeff: Optional[float] = 0.001,
                  l2_reg_coeff: Optional[float] = 0.001,
                  dtype = torch.float32,
-                 initial_weight = 2.0
+                 initial_weight = 0.1
                  ):
         """
         Класс для обучения CANN моделей.
@@ -44,7 +44,7 @@ class Trainer:
             - `experiment_name` (str): Название эксперимента. По умолчанию "test".
             - `model` (nn.Module): Архитектура модели для обучения. По умолчанию `StrainEnergyCANN_C`.
             - `path_to_save_weights` (str): Путь для сохранения весов модели.
-            - `epochs` (int): Количество эпох обучения. По умолчанию 100.
+            - `epochs` (int): Количество эпох обучения. По умолчанию 1000.
             - `learning_rate` (float): Скорость обучения. По умолчанию 0.001.
             - `plot_valid` (bool): Отрисовка ошибки на валидационном датасете. По умолчанию False.
             - `l1_reg_coeff` (float): Коэффициент регуляризации L1. По умолчанию 0.001.
@@ -131,7 +131,7 @@ class Trainer:
 
             for i, data in enumerate(train_loader):
                 features, target = data
-                _, _, i1, i2, i4, i5, _, exp_type = features
+                # _, _, i1, i2, i4, i5, _, exp_type = features
 
                 optimizer.zero_grad()
                 stress_model = self.model(features)
@@ -147,11 +147,11 @@ class Trainer:
                 loss_yy = loss_fn(stress_model.T[1], target.T[1])
                 loss = loss_xx + loss_yy
                 loss = loss.sum()
-                if weighting_data:
-                    if exp_type == "Compression":
-                        loss *= 0.5
-                    elif exp_type == "Tensile":
-                        loss *= 1.5
+                # if weighting_data:
+                #     if exp_type == "Compression":
+                #         loss *= 0.5
+                #     elif exp_type == "Tensile":
+                #         loss *= 1.5
 
                 if self.l2_reg_coeff is not None:
                     l2_reg = self.model.calc_regularization(2)
@@ -218,9 +218,9 @@ class Trainer:
                 # print("------------------------------------------------------------------")
                 best_vloss = avg_vloss
 
-            if epoch - best_epoch > 200 and best_vloss - avg_vloss < 10e-2: break
+            if epoch - best_epoch > 200 and best_vloss - avg_vloss < 10e-3: break
 
-            elif epoch % 1000 == 0:
+            elif epoch % 100 == 0:
                 print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
                 print("psi = ", self.model.get_potential())
                 print("------------------------------------------------------------------")
@@ -290,7 +290,5 @@ class Trainer:
         return val_loss
 
 
-
-
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#   main()
