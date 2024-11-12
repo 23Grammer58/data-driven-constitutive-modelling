@@ -35,7 +35,8 @@ class Trainer:
                  l1_reg_coeff: Optional[float] = 0.001,
                  l2_reg_coeff: Optional[float] = 0.001,
                  dtype = torch.float32,
-                 initial_weight = 0.1
+                 initial_weight = 0.1,
+                 SingleInvNet = SingleInvNet4
                  ):
         """
         Класс для обучения CANN моделей.
@@ -57,8 +58,8 @@ class Trainer:
         self.l1_reg_coeff = l1_reg_coeff
         self.l2_reg_coeff = l2_reg_coeff
         if model == ModelArchitecture_I5:
-            psi_model = StrainEnergy_i5()
-            self.model = model(psi_model, setAl=True, init=torch.pi / 4, initial_weight=initial_weight)
+            psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet)
+            self.model = model(psi_model, setAl=True, init=torch.pi / 2, initial_weight=initial_weight)
         else:
             self.model = model(batch_size, device=device, dtype=dtype)
         self.device = device
@@ -119,7 +120,7 @@ class Trainer:
         loss_fn = nn.MSELoss(reduction='none')
         optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
-        train_data_count = len(train_loader)
+        train_data_count = len(train_loader) * self.batch_size
 
         if test_loader is None:
             test_data_count = train_data_count
@@ -218,7 +219,7 @@ class Trainer:
                 # print("------------------------------------------------------------------")
                 best_vloss = avg_vloss
 
-            if epoch - best_epoch > 200 and best_vloss - avg_vloss < 10e-3: break
+            if epoch - best_epoch > 200 and abs(best_vloss - avg_vloss) < 10e-6: break
 
             elif epoch % 100 == 0:
                 print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
