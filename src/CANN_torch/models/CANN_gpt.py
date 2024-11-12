@@ -2,8 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.potential_zoo import get_psi
-
+# from models.potential_zoo import get_psi
+# from ..utils.potential_zoo import get_psi
 
 def flatten(l):
     return [item for sublist in l for item in sublist]
@@ -49,6 +49,44 @@ class SingleInvNet4(nn.Module):
         with torch.no_grad():
             for param in self.parameters():
                 param.clamp_(min=0)
+
+# Define Invariant building-blocks
+class SingleInvNet6(nn.Module):
+    def __init__(self, bias=3):
+        super(SingleInvNet6, self).__init__()
+        self.layer1 = nn.Linear(1, 1, bias=False)
+        self.layer2 = nn.Linear(1, 1, bias=False)
+        self.layer3 = nn.Linear(1, 1, bias=False)
+        self.layer4 = nn.Linear(1, 1, bias=False)
+        self.layer5 = nn.Linear(1, 1, bias=False)
+        self.layer6 = nn.Linear(1, 1, bias=False)
+
+        self.terms_count = 6
+        self.bias = bias
+        nn.init.uniform_(self.layer1.weight, 0.01, 1.0)
+        nn.init.uniform_(self.layer2.weight, 0.01, 0.1)
+        nn.init.uniform_(self.layer3.weight, 0.01, 1.0)
+        nn.init.uniform_(self.layer4.weight, 0.01, 0.1)
+        # nn.init.constant_(self.layer2.weight, 0.1)
+        # nn.init.constant_(self.layer3.weight, 1.0)
+        # nn.init.constant_(self.layer4.weight, 0.1)
+
+    def forward(self, I_in):
+        I_ref = I_in - self.bias
+        I_w11 = self.layer1(I_ref)
+        I_w21 = activation_exp(self.layer2(I_ref))
+        I_w31 = activation_ln(self.layer2(I_ref))
+        I_w41 = self.layer3(I_ref ** 2)
+        I_w51 = activation_exp(self.layer4(I_ref ** 2))
+        I_w61 = activation_ln(self.layer2(I_ref))
+
+        return torch.cat((I_w11, I_w21, I_w31, I_w41, I_w51, I_w61), dim=1)
+
+    def clamp_weights(self):
+        with torch.no_grad():
+            for param in self.parameters():
+                param.clamp_(min=0)
+
 
 
 # Define CANN Strain energy
@@ -175,7 +213,7 @@ class ModelArchitecture_I5(nn.Module):
 
 
     def forward(self, inputs):
-        Stretch_x, Stretch_y, _, _, _, _, _, _ = inputs
+        Stretch_x, Stretch_y = inputs[:2]
         Stretch_x = Stretch_x.unsqueeze(1).requires_grad_(True)
         Stretch_y = Stretch_y.unsqueeze(1).requires_grad_(True)
 
@@ -219,8 +257,8 @@ class ModelArchitecture_I5(nn.Module):
             self.get_weights()
 
         w = self.potential_constants
-        potential_str = get_psi(w, terms=self.Psi_model.all_terms_count, p=p)
-        return potential_str
+        # potential_str = get_psi(w, terms=self.Psi_model.all_terms_count, p=p)
+        # return potential_str
 
     def clamp_weights(self):
         with torch.no_grad():
@@ -237,6 +275,7 @@ class ModelArchitecture_I5(nn.Module):
 
     def calc_l1(self):
         return torch.sum(torch.abs(self.potential_constants))
+
 # Example usage
 # psi_model = StrainEnergy_i5()  # Initialize your Psi model here
 # model = ModelArchitecture_I5(psi_model, setAl=True, init=0.1)
@@ -247,12 +286,12 @@ class ModelArchitecture_I5(nn.Module):
 
 if __name__ == "__main__":
     w_16 = np.ones((2, 16))
-    print(get_psi(w_16, 16))
+    # print(get_psi(w_16, 16))
 
-    psi_model = StrainEnergy_i5()
+    psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet6)
     model = ModelArchitecture_I5(psi_model, setAl=True, init=torch.pi / 4)
 
-    print(model.get_potential())
+    print(model)
     # for module in model.modules():
     #     print(module._get_name())
     #     if module._get_name() == "Linear":
