@@ -2,7 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from models.potential_zoo import get_psi
+
+from models.potential_zoo import get_psi
 # from ..utils.potential_zoo import get_psi
 
 def flatten(l):
@@ -50,6 +51,7 @@ class SingleInvNet4(nn.Module):
             for param in self.parameters():
                 param.clamp_(min=0)
 
+
 # Define Invariant building-blocks
 class SingleInvNet6(nn.Module):
     def __init__(self, bias=3):
@@ -66,7 +68,9 @@ class SingleInvNet6(nn.Module):
         nn.init.uniform_(self.layer1.weight, 0.01, 1.0)
         nn.init.uniform_(self.layer2.weight, 0.01, 0.1)
         nn.init.uniform_(self.layer3.weight, 0.01, 1.0)
-        nn.init.uniform_(self.layer4.weight, 0.01, 0.1)
+        nn.init.uniform_(self.layer4.weight, 0.01, 1.0)
+        nn.init.uniform_(self.layer5.weight, 0.01, 0.1)
+        nn.init.uniform_(self.layer6.weight, 0.01, 1.0)
         # nn.init.constant_(self.layer2.weight, 0.1)
         # nn.init.constant_(self.layer3.weight, 1.0)
         # nn.init.constant_(self.layer4.weight, 0.1)
@@ -75,10 +79,10 @@ class SingleInvNet6(nn.Module):
         I_ref = I_in - self.bias
         I_w11 = self.layer1(I_ref)
         I_w21 = activation_exp(self.layer2(I_ref))
-        I_w31 = activation_ln(self.layer2(I_ref))
-        I_w41 = self.layer3(I_ref ** 2)
-        I_w51 = activation_exp(self.layer4(I_ref ** 2))
-        I_w61 = activation_ln(self.layer2(I_ref))
+        I_w31 = activation_ln(self.layer3(I_ref))
+        I_w41 = self.layer4(I_ref ** 2)
+        I_w51 = activation_exp(self.layer5(I_ref ** 2))
+        I_w61 = activation_ln(self.layer6(I_ref))
 
         return torch.cat((I_w11, I_w21, I_w31, I_w41, I_w51, I_w61), dim=1)
 
@@ -86,7 +90,6 @@ class SingleInvNet6(nn.Module):
         with torch.no_grad():
             for param in self.parameters():
                 param.clamp_(min=0)
-
 
 
 # Define CANN Strain energy
@@ -107,11 +110,9 @@ class StrainEnergy_i5(nn.Module):
         # nn.init.constant_(self.final_layer.weight, 1.0)
         nn.init.uniform_(self.final_layer.weight, 0.01, 1.0)
 
-
         # nn.init.xavier_normal_(self.final_layer.weight)
 
     def forward(self, I1_ref, I2_ref, I4_ref, I5_ref):
-
         I1_out = self.I1_net(I1_ref)
         I2_out = self.I2_net(I2_ref)
         I4_out = self.I4_net(I4_ref)
@@ -159,19 +160,22 @@ def stress_calc_bx(inputs):
 
     # minus = two * (dPsidI1 * 1 / (Stretch ** 2) + dPsidI2 * 1 / (Stretch ** 3))
     # stress = two * (dPsidI1 * Stretch + dPsidI2 * one) - minus
-    first_11 = (Stretch1 - one / (Stretch1**two * Stretch2**two))
-    second_11 = (Stretch1 * Stretch2**two + one / (Stretch1 * Stretch2**two) - one / (Stretch1**two) - one / (Stretch2**two))
-    fourth_11 = Stretch1 * torch.cos(al)**two
-    fifth_11 = Stretch1**three * torch.cos(al)**two
+    first_11 = (Stretch1 - one / (Stretch1 ** two * Stretch2 ** two))
+    second_11 = (Stretch1 * Stretch2 ** two + one / (Stretch1 * Stretch2 ** two) - one / (Stretch1 ** two) - one / (
+                Stretch2 ** two))
+    fourth_11 = Stretch1 * torch.cos(al) ** two
+    fifth_11 = Stretch1 ** three * torch.cos(al) ** two
 
-    first_22 = (Stretch2 - one / (Stretch1**two * Stretch2**two))
-    second_22 = (Stretch1**two * Stretch2 + one / (Stretch1 ** two * Stretch2) - one / (Stretch1**two) - one / (Stretch2**two))
+    first_22 = (Stretch2 - one / (Stretch1 ** two * Stretch2 ** two))
+    second_22 = (Stretch1 ** two * Stretch2 + one / (Stretch1 ** two * Stretch2) - one / (Stretch1 ** two) - one / (
+                Stretch2 ** two))
     fourth_22 = Stretch2 * torch.sin(al) ** two
-    fifth_22 = Stretch2**three * torch.sin(al) ** two
+    fifth_22 = Stretch2 ** three * torch.sin(al) ** two
 
     P11 = two * (first_11 * dPsidI1 + second_11 * dPsidI2 + fourth_11 * dPsidI4 + two * fifth_11 * dPsidI5)
     P22 = two * (first_22 * dPsidI1 + second_22 * dPsidI2 + fourth_22 * dPsidI4 + two * fifth_22 * dPsidI5)
     return torch.cat((P11, P22), dim=1)
+
 
 # Define H-layer
 class H_Layer_FungBiax_I4I5(nn.Module):
@@ -185,8 +189,8 @@ class H_Layer_FungBiax_I4I5(nn.Module):
         lamx, lamy = lam.split(1, dim=1)
         al = F.relu(self.alpha)
         # al = torch.pi / torch.tensor(4.)
-        h11_i4 = lamx**2 * (torch.cos(al) ** 2)
-        h22_i4 = lamy**2 * (torch.sin(al) ** 2)
+        h11_i4 = lamx ** 2 * (torch.cos(al) ** 2)
+        h22_i4 = lamy ** 2 * (torch.sin(al) ** 2)
 
         h11_i5 = (lamx ** 4) * (torch.cos(al) ** 2)
         h22_i5 = (lamy ** 4) * (torch.sin(al) ** 2)
@@ -210,7 +214,6 @@ class ModelArchitecture_I5(nn.Module):
         #         # get the number of the inputs
         #         torch.nn.init.uniform_(layer.weight, a=0.01, b=initial_weight)
         #         layer.weight.data = torch.clamp(layer.weight.data, min=0)
-
 
     def forward(self, inputs):
         Stretch_x, Stretch_y = inputs[:2]
@@ -249,7 +252,7 @@ class ModelArchitecture_I5(nn.Module):
                 w1.append(self.state_dict()[k].squeeze().item())
             elif "final" in k:
                 w2 = self.state_dict()[k].squeeze()
-        self.potential_constants =  torch.tensor([w1, w2])
+        self.potential_constants = torch.tensor([w1, w2])
 
     def get_potential(self, p=3):
 
@@ -257,8 +260,37 @@ class ModelArchitecture_I5(nn.Module):
             self.get_weights()
 
         w = self.potential_constants
-        # potential_str = get_psi(w, terms=self.Psi_model.all_terms_count, p=p)
-        # return potential_str
+        potential_str = get_psi(w, terms=self.Psi_model.all_terms_count, p=p)
+        return potential_str
+
+    def extract_weights_as_blocks(self, w=None, precision=6):
+        if not w:
+            self.get_weights()
+            w = self.potential_constants
+        p = precision
+        blocks = {
+            "(I1 - 3)": w[1, 0] * w[0, 0],
+            "e^(I1 - 3) - 1": (w[1, 1], w[0, 1]),
+            "(I1 - 3)^2": w[1, 2] * w[0, 2],
+            "e^(I1 - 3)^2 - 1": (w[1, 3], w[0, 3]),
+            "(I2 - 3)": w[1, 4] * w[0, 4],
+            "e^(I2 - 3) - 1": (w[1, 5], w[0, 5]),
+            "(I2 - 3)^2": w[1, 6] * w[0, 6],
+            "e^(I2 - 3)^2 - 1": (w[1, 7], w[0, 7]),
+            "(I4 - 3)": w[1, 8] * w[0, 8],
+            "e^(I4 - 3) - 1": (w[1, 9], w[0, 9]),
+            "(I4 - 3)^2": w[1, 10] * w[0, 10],
+            "e^(I4 - 3)^2 - 1": (w[1, 11], w[0, 11]),
+            "(I5 - 3)": w[1, 12] * w[0, 12],
+            "e^(I5 - 3) - 1": (w[1, 13], w[0, 13]),
+            "(I5 - 3)^2": w[1, 14] * w[0, 14],
+            "e^(I5 - 3)^2 - 1": (w[1, 15], w[0, 15]),
+        }
+        # Форматирование значений
+        formatted_blocks = {
+            block: f"{weight[0]:.{p}f}, {weight[1]:.{p}f}" if isinstance(weight, tuple) else f"{weight:.{p}f}" for
+            block, weight in blocks.items()}
+        return formatted_blocks
 
     def clamp_weights(self):
         with torch.no_grad():
@@ -275,6 +307,7 @@ class ModelArchitecture_I5(nn.Module):
 
     def calc_l1(self):
         return torch.sum(torch.abs(self.potential_constants))
+
 
 # Example usage
 # psi_model = StrainEnergy_i5()  # Initialize your Psi model here
