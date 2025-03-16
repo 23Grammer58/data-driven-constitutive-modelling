@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.potential_zoo import get_psi
+from CANN_torch.models.potential_zoo import get_psi
 # from ..utils.potential_zoo import get_psi
 
 def flatten(l):
@@ -19,7 +19,7 @@ def activation_ln(x):
 
 
 # Define Invariant building-blocks
-class SingleInvNet4(nn.Module):
+class SingleInvNet4_old(nn.Module):
     def __init__(self, bias=3):
         super(SingleInvNet4, self).__init__()
         self.layer1 = nn.Linear(1, 1, bias=False)
@@ -91,6 +91,70 @@ class SingleInvNet6(nn.Module):
             for param in self.parameters():
                 param.clamp_(min=0)
 
+
+class BaseInvNet(nn.Module):
+    def __init__(self, activation_functions, polynomial_degree, bias=3):
+        """
+        Базовый класс для инвариантных сетей.
+
+        :param activation_functions: Список функций активации, например, ["linear", "exp", "ln"].
+        :param polynomial_degree: Степень полинома для входных данных.
+        :param bias: Смещение для входных данных.
+        """
+        super(BaseInvNet, self).__init__()
+        self.activation_functions = activation_functions
+        self.polynomial_degree = polynomial_degree
+        self.bias = bias
+
+        # Количество терминов = количество функций активации * степень полинома
+        self.terms_count = len(activation_functions) * polynomial_degree
+
+        # Создаем линейные слои для каждого термина
+        self.layers = nn.ModuleList([nn.Linear(1, 1, bias=False) for _ in range(self.terms_count)])
+        self.init_weights()  # Инициализация весов
+
+    def init_weights(self):
+        # Инициализация весов каждого слоя
+        for layer in self.layers:
+            nn.init.uniform_(layer.weight, 0.01, 1.0)
+
+    def forward(self, I_in):
+        # Вычисление выхода для каждого термина
+        I_ref = I_in - self.bias  # Смещение входных данных
+        outputs = []
+
+        for i in range(1, self.polynomial_degree + 1):
+            poly_term = I_ref ** i  # Полиномиальный член (I_ref^1, I_ref^2, ...)
+            for activation in self.activation_functions:
+                # Применяем соответствующую функцию активации
+                if activation == "linear":
+                    outputs.append(self.layers[len(outputs)](poly_term))
+                elif activation == "exp":
+                    outputs.append(activation_exp(self.layers[len(outputs)](poly_term)))
+                elif activation == "ln":
+                    outputs.append(activation_ln(self.layers[len(outputs)](poly_term)))
+                else:
+                    raise ValueError(f"Unknown activation function: {activation}")
+
+        return torch.cat(outputs, dim=1)  # Объединяем результаты
+
+    def clamp_weights(self):
+        # Ограничение весов (неотрицательные значения)
+        with torch.no_grad():
+            for param in self.parameters():
+                param.clamp_(min=0)
+
+class SingleInvNet4(BaseInvNet):
+    def __init__(self, bias=3):
+        activation_functions = ["linear", "exp"]
+        polynomial_degree = 2
+        super(SingleInvNet4, self).__init__(activation_functions, polynomial_degree, bias=bias)
+
+class SingleInvNet6(BaseInvNet):
+    def __init__(self, bias=3):
+        activation_functions = ["linear", "exp", "ln"]
+        polynomial_degree = 2
+        super(SingleInvNet6, self).__init__(activation_functions, polynomial_degree, bias=bias)
 
 # Define CANN Strain energy
 class StrainEnergy_i5(nn.Module):
@@ -200,7 +264,7 @@ class H_Layer_FungBiax_I4I5(nn.Module):
 
 # Complete model architecture definition
 class ModelArchitecture_I5(nn.Module):
-    def __init__(self, Psi_model, setAl, init, initial_weight=0.1):
+    def __init__(self, Psi_model, setAl, init=True, initial_weight=0.1):
         super(ModelArchitecture_I5, self).__init__()
         self.Psi_model = Psi_model
         self.H_layer = H_Layer_FungBiax_I4I5('alpha', setAl, init)
@@ -303,10 +367,10 @@ class ModelArchitecture_I5(nn.Module):
         :param l: power
         :return: sum of potential coefficients to the power of p
         """
-        return torch.sum(self.potential_constants ** l)
-
-    def calc_l1(self):
-        return torch.sum(torch.abs(self.potential_constants))
+        if l == 1:
+            return torch.sum(torch.abs(self.potential_constants))
+        else:
+            return torch.sum(self.potential_constants ** l)
 
 
 # Example usage
@@ -318,19 +382,9 @@ class ModelArchitecture_I5(nn.Module):
 # print(output)
 
 if __name__ == "__main__":
-    w_16 = np.ones((2, 16))
-    # print(get_psi(w_16, 16))
-
-    psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet6)
-    model = ModelArchitecture_I5(psi_model, setAl=True, init=torch.pi / 4)
-
-    print(model)
-    # for module in model.modules():
-    #     print(module._get_name())
-    #     if module._get_name() == "Linear":
-    #         for w in module.parameters():
-    #             print(w)
-    # for p in model.parameters():
-    #     for v in p.values():
-    #         print(v)
-    # print(model.get_potential())
+    psi_model = StrainEnergy_i5()  # Initialize your Psi model here
+    model = ModelArchitecture_I5(psi_model, setAl=True, init=0.1)
+    Stretch_x = torch.tensor([[1.1], [1.2]], requires_grad=True)
+    Stretch_y = torch.tensor([[1.1], [1.2]], requires_grad=True)
+    output = model((Stretch_x, Stretch_y))
+    print(output)

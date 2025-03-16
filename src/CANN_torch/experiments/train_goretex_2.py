@@ -6,14 +6,16 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset, Dataset
 
+import itertools
 import copy
+import pathlib
 from datetime import datetime
 import os
 import matplotlib.pyplot as plt
 from typing import Optional
 from sklearn.metrics import r2_score
 from models.CNN import *
-from models.CANN_gpt import ModelArchitecture_I5
+from models.CANN_gpt import ModelArchitecture_I5, SingleInvNet6, SingleInvNet4
 # from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C, StrainEnergyCANN_polinomial3
 from utils.dataload import ExcelDataset, normalize_data
 from utils.visualisation import *
@@ -22,7 +24,7 @@ import pandas as pd
 from trainer import Trainer
 
 # hyperparameters and paths
-path_to_data = r"..\..\data\GoreTex\2\DIC\2"
+path_to_data = r"../../../data/GoreTex/2/DIC/3"
 experiment_mod = "biaxial"
 batch_size = 16
 # path_to_results = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models"
@@ -73,14 +75,14 @@ def find_local_minima(data, window_size=2, threshold=0.0005):
 lamx = "# Xlam"
 def preproc_data(experiment_protocols: list = None):
     experiments_path = get_list_of_paths_to_experiments_type()
-    data_frames = [load_and_extract(file, file[-22:-18]) for file in experiments_path]
+    data_frames = [load_and_extract(file, file[-11:-4]) for file in experiments_path] # поменять для друго даты
 
     num_points = 10
     # _ = []
 
     # data_frames = _
     # разобьем комплексный эксперимент по циклам
-    data_frame_complex = data_frames[0]
+    # data_frame_complex = data_frames[0]
 
     # data_frame_complex['Xlam_diff'] = data_frame_complex['# Xlam'].diff(periods=2)
     # data_frame_complex['Ylam_diff'] = data_frame_complex['Ylam'].diff(periods=2)
@@ -96,18 +98,18 @@ def preproc_data(experiment_protocols: list = None):
     # # Обновляем столбец с номерами циклов
     # data_frame_complex['experiment_type'] = min_points
 
-    protocol_mapping = {
-        0.0: "100_100",
-        2.0: "100_075",
-        4.0: "075_100",
-        6.0: "100_050",
-        8.0: "050_100",
-        10.0: "100_030",
-        12.0: "030_100"
-    }
-
-    # Заменяем значения experiment_type на протоколы
-    data_frame_complex['experiment_type'] = data_frame_complex['experiment_type'].map(protocol_mapping)
+    # protocol_mapping = {
+    #     0.0: "100_100",
+    #     2.0: "100_075",
+    #     4.0: "075_100",
+    #     6.0: "100_050",
+    #     8.0: "050_100",
+    #     10.0: "100_030",
+    #     12.0: "030_100"
+    # }
+    #
+    # # Заменяем значения experiment_type на протоколы
+    # data_frame_complex['experiment_type'] = data_frame_complex['experiment_type'].map(protocol_mapping)
 
     # Удаляем вспомогательные столбцы для дифференцирования
     # data_frames[0] = data_frame_complex.drop(columns=['Xlam_diff', 'Ylam_diff'])
@@ -248,14 +250,18 @@ def init_loaders(
         all_data = preproc_data(None)
 
     # переписать___________
+    # if experiment_protocol_train == "all":
+    #     train_dataframe = all_data
     if type(experiment_protocol_train) is str and experiment_protocol_train != "all":
         experiment_protocol_train = [experiment_protocol_train]
-    if type(experiment_protocol_train) is list:
+    if type(experiment_protocol_train) is list or tuple:
         train_dataframe = pd.concat([all_data[all_data["experiment_type"] == experiment] for experiment in
-                        experiment_protocol_train]).reset_index(drop=True, inplace=False)
+                        experiment_protocol_train ]).reset_index(drop=True, inplace=False)
     else:
         train_dataframe = all_data
 
+    # if experiment_protocol_test == "all":
+    #     test_dataframe = all_data
     if type(experiment_protocol_test) is str and experiment_protocol_test != "all":
         experiment_protocol_test = [experiment_protocol_test]
     if type(experiment_protocol_test) is list:
@@ -291,7 +297,7 @@ def init_loaders(
     return train_data_loader, test_data_loader
 
 
-def plot_results_by_experiment_type(data: pd.DataFrame, path_to_save: str, plot_name_prefix: str = "plot"):
+def plot_results_by_experiment_type_(data: pd.DataFrame, path_to_save: str, plot_name_prefix: str = "plot"):
     """
      Visualize dataset and predictions.
     """
@@ -321,7 +327,7 @@ def plot_results_by_experiment_type(data: pd.DataFrame, path_to_save: str, plot_
         plt.legend()
         if path_to_save:
             plt.savefig(os.path.join(path_to_save, f"{plot_name_prefix}_{experiment_type}_x.png"))
-        plt.show()
+        # plt.show()
 
         # Создадим второй график (lambda_y, P22) и скаттер на нем stress_y для данного типа эксперимента
         fig, ax2 = plt.subplots(figsize=(10, 6))
@@ -337,9 +343,9 @@ def plot_results_by_experiment_type(data: pd.DataFrame, path_to_save: str, plot_
         ax2.set_ylabel('P22 / Stress_y (MPa)')
         plt.legend()
         plt.savefig(os.path.join(path_to_save, f"{plot_name_prefix}_{experiment_type}_y.png"))
-        plt.show()
         r2s[experiment_type] = (r2_p11, r2_p22)
 
+    plt.show()
     r2s = pd.DataFrame.from_dict(r2s, orient='index', columns=['PX', 'PY'])
     r2s.reset_index(inplace=True)
     r2s.rename(columns={'index': 'Category'}, inplace=True)
@@ -350,6 +356,187 @@ def plot_results_by_experiment_type(data: pd.DataFrame, path_to_save: str, plot_
     r2s = pd.concat([r2s, mean_row], ignore_index=True)
     return r2s
 
+
+def plot_results_by_experiment_type__(data: pd.DataFrame, path_to_save: str, plot_name_prefix: str = "plot"):
+    """
+    Visualize dataset and predictions.
+    """
+
+    data.columns = ['lambda_x', 'lambda_y', 'stress_x', 'stress_y', 'experiment_type', 'P11', 'P22']
+
+    # Получим уникальные типы экспериментов
+    experiment_types = data['experiment_type'].unique()
+    r2s = dict.fromkeys(experiment_types)
+
+    # Создаем списки для хранения данных для объединенных графиков
+    combined_lambda_x_data = []
+    combined_lambda_y_data = []
+
+    for experiment_type in experiment_types:
+        subset = data[data['experiment_type'] == experiment_type]
+
+        # Создадим первый график (lambda_x, P11) и скаттер на нем stress_x для данного типа эксперимента
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+
+        sns.lineplot(data=subset, x='lambda_x', y='P11', ax=ax1, label='P11')
+        sns.scatterplot(data=subset, x='lambda_x', y='stress_x', ax=ax1, color='red', label='Stress_x')
+
+        # Рассчитаем R² для P11
+        r2_p11 = r2_score(subset['stress_x'], subset['P11'])
+
+        ax1.set_title(f'{experiment_type}: P11 and Stress_x\nR² = {r2_p11:.2f}')
+        ax1.set_xlabel('Lambda_x')
+        ax1.set_ylabel('P11 / Stress_x (MPa)')
+        plt.legend()
+        if path_to_save:
+            plt.savefig(os.path.join(path_to_save, f"{plot_name_prefix}_{experiment_type}_x.png"))
+        plt.close(fig)  # Закрываем фигуру после сохранения
+
+        # Сохраним данные для объединенного графика по x
+        combined_lambda_x_data.append((subset['lambda_x'], subset['P11'], experiment_type))
+
+        # Создадим второй график (lambda_y, P22) и скаттер на нем stress_y для данного типа эксперимента
+        fig, ax2 = plt.subplots(figsize=(10, 6))
+
+        sns.lineplot(data=subset, x='lambda_y', y='P22', ax=ax2, label='P22')
+        sns.scatterplot(data=subset, x='lambda_y', y='stress_y', ax=ax2, color='blue', label='Stress_y')
+
+        # Рассчитаем R² для P22
+        r2_p22 = r2_score(subset['stress_y'], subset['P22'])
+
+        ax2.set_title(f'{experiment_type}: P22 and Stress_y\nR² = {r2_p22:.2f}')
+        ax2.set_xlabel('Lambda_y')
+        ax2.set_ylabel('P22 / Stress_y (MPa)')
+        plt.legend()
+        if path_to_save:
+            plt.savefig(os.path.join(path_to_save, f"{plot_name_prefix}_{experiment_type}_y.png"))
+        plt.close(fig)  # Закрываем фигуру после сохранения
+
+        # Сохраним данные для объединенного графика по y
+        combined_lambda_y_data.append((subset['lambda_y'], subset['P22'], experiment_type))
+
+        r2s[experiment_type] = (r2_p11, r2_p22)
+
+    # Объединенный график по lambda_x
+    fig, ax_combined_x = plt.subplots(figsize=(10, 6))
+    for lambda_x, P11, experiment_type in combined_lambda_x_data:
+        sns.lineplot(x=lambda_x, y=P11, ax=ax_combined_x, label=experiment_type)
+    ax_combined_x.set_title('Combined P11 vs Lambda_x for All Experiment Types')
+    ax_combined_x.set_xlabel('Lambda_x')
+    ax_combined_x.set_ylabel('P11')
+    plt.legend()
+    if path_to_save:
+        plt.savefig(os.path.join(path_to_save, f"{plot_name_prefix}_combined_x.png"))
+    plt.close(fig)  # Закрываем фигуру после сохранения
+
+    # Объединенный график по lambda_y
+    fig, ax_combined_y = plt.subplots(figsize=(10, 6))
+    for lambda_y, P22, experiment_type in combined_lambda_y_data:
+        sns.lineplot(x=lambda_y, y=P22, ax=ax_combined_y, label=experiment_type)
+    ax_combined_y.set_title('Combined P22 vs Lambda_y for All Experiment Types')
+    ax_combined_y.set_xlabel('Lambda_y')
+    ax_combined_y.set_ylabel('P22')
+    plt.legend()
+    if path_to_save:
+        plt.savefig(os.path.join(path_to_save, f"{plot_name_prefix}_combined_y.png"))
+        plt.close(fig)  # Закрываем фигуру после сохранения
+
+    r2s = pd.DataFrame.from_dict(r2s, orient='index', columns=['PX', 'PY'])
+    r2s.reset_index(inplace=True)
+    r2s.rename(columns={'index': 'Category'}, inplace=True)
+
+    # Вычисление среднего значения по всем значениям
+    mean_values = r2s[['PX', 'PY']].mean()
+    mean_row = pd.DataFrame([['Mean', mean_values['PX'], mean_values['PY']]], columns=r2s.columns)
+
+    # Добавление строки со средними значениями в DataFrame
+    r2s = pd.concat([r2s, mean_row], ignore_index=True)
+
+    return r2s
+
+
+def plot_results_by_experiment_type(data: pd.DataFrame, path_to_save: str, plot_name_prefix: str = "plot_test_all"):
+    """
+    Visualize dataset and predictions.
+    """
+
+    data.columns = ['lambda_x', 'lambda_y', 'stress_x', 'stress_y', 'experiment_type', 'P11', 'P22']
+
+    # Получим уникальные типы экспериментов
+    experiment_types = data['experiment_type'].unique()
+    r2s = dict.fromkeys(experiment_types)
+
+    # Создаем фигуры для общего графика по x и y
+    plt.figure(figsize=(12, 6))
+
+    # График для всех типов экспериментов по lambda_x
+    for experiment_type in experiment_types:
+        subset = data[data['experiment_type'] == experiment_type]
+
+        # Линия P11
+        sns.lineplot(data=subset, x='lambda_x', y='P11', label=f'P11 - {experiment_type}', ci=None)
+        # Точки stress_x
+        sns.scatterplot(data=subset, x='lambda_x', y='stress_x', color='red', label=f'Stress_x - {experiment_type}',
+                        marker='o')
+
+        # Рассчитаем R² для P11
+        r2_p11 = r2_score(subset['stress_x'], subset['P11'])
+        if r2_p11 < 0:
+            r2_p11 = 0.
+        r2s[experiment_type] = (r2_p11, None)  # Сохраняем R² для P11
+
+    plt.title('P11 and Stress_x for all Experiment Types')
+    plt.xlabel('Lambda_x')
+    plt.ylabel('P11 / Stress_x (MPa)')
+    plt.legend()
+    if path_to_save:
+        plt.savefig(os.path.join(path_to_save, f"{plot_name_prefix}_all_x.png"))
+        plt.close()
+
+    plt.show()
+
+    # Создаем фигуру для общего графика по lambda_y
+    plt.figure(figsize=(12, 6))
+
+    for experiment_type in experiment_types:
+        subset = data[data['experiment_type'] == experiment_type]
+
+        # Линия P22
+        # sns.lineplot(data=subset, x='lambda_y', y='P22', label=f'P22 - {experiment_type}', ci=None)
+        sns.lineplot(data=subset, x='lambda_y', y='P22', label=f'P22 - {experiment_type}')
+        # Точки stress_y
+        sns.scatterplot(data=subset, x='lambda_y', y='stress_y', color='blue', label=f'Stress_y - {experiment_type}',
+                        marker='o')
+
+        # Рассчитаем R² для P22
+        r2_p22 = r2_score(subset['stress_y'], subset['P22'])
+        if r2_p22 < 0:
+            r2_p22 = 0.
+        r2s[experiment_type] = (r2s[experiment_type][0], r2_p22)  # Сохраняем R² для P22
+
+    plt.title('P22 and Stress_y for all Experiment Types')
+    plt.xlabel('Lambda_y')
+    plt.ylabel('P22 / Stress_y (MPa)')
+    plt.legend()
+    if path_to_save:
+        plt.savefig(os.path.join(path_to_save, f"{plot_name_prefix}_all_y.png"))
+
+    plt.show()
+
+    # Конвертация R² в DataFrame и добавление среднего значения
+    r2s = pd.DataFrame.from_dict(r2s, orient='index', columns=['PX', 'PY'])
+    r2s.reset_index(inplace=True)
+    r2s.rename(columns={'index': 'Category'}, inplace=True)
+
+    # Вычисление среднего значения по всем значениям
+    mean_values = r2s[['PX', 'PY']].mean()
+    mean_row = pd.DataFrame([['Mean', mean_values['PX'], mean_values['PY']]], columns=r2s.columns)
+
+    # Добавление строки со средними значениями в DataFrame
+    r2s = pd.concat([r2s, mean_row], ignore_index=True)
+
+    return r2s
+
 def main():
 
     dataframe_all = preproc_data()
@@ -358,35 +545,49 @@ def main():
     #models = [ModelArchitecture_I5_exp, ModelArchitecture_I5_log]
 
     # checkpoint_path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\GoreTex_DIC_2_OffX_ModelArchitecture_I5\20241030_1926_9999.pth"
-    path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\GoreTex_DIC_2_['030_100', '100_100', '050_100', '100_075']_ModelArchitecture_I5\20241112_2038_4997.pth"
-    # experiments_all = ["OffX"]
-    # experiments_all = ["100_100", '100_050', "100_075", "100_030", '050_100', "075_100", "030_100",
-    #                    "Equi", "HolX", "HolY", "OffY"]
+    path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\GoreTex_DIC_3_log_16_['030_100', '100_100', '050_100', '100_075']_ModelArchitecture_I5\20241112_2220_2990.pth"
+    # experiments_all = [["075_100"]]
+    experiments_all = ["100_100", '100_050', "100_075", '050_100', "075_100", "100_030", "030_100", ["100_100", '100_050', "100_075", '050_100', "075_100", "100_030", "030_100"]]
+    # experiments_all = ["all"]
+    # experiments_all = [["100_100"], ['100_050'], ["100_075"], ["100_030"], ['050_100'], ["075_100"], ["030_100"]]
     # experiments_all = [["100_100", '100_050', "100_075", "100_030", '050_100', "075_100", "030_100", "HolY", "OffX", "OffY"]]
 
-    # experiments_all = [["030_100", "100_100", '050_100', "100_075", "HolY", "OffX"]]
+    # experiments_all = [["030_100", "100_100", '050_100', "100_075", "HolY", "OffX"], ["030_100", "100_100", '050_100', "100_075"],
+    #                    ["100_100", '100_050', "100_075", "100_030", '050_100', "075_100", "030_100", "HolY", "OffX", "OffY"]]
     # experiments_all = [["030_100", "100_100", '050_100', "100_075"], ["030_100"], ["100_100"], ['050_100'], ["100_075"]]
-    experiments_all = [["030_100", "100_100", '050_100', "100_075"]]
+    # experiments_all = [["030_100", "100_100", '050_100', "100_075"]]
     # dataframe = dataframe_all[dataframe_all['experiment_type'].isin(["030_100", "100_100", "050_100", "100_075"])]
+    # experiments_all = [list(itertools.combinations(experiments_all, r)) for r in range(1, len(experiments_all) + 1)]
     r2_mean = []
+    summary_table = []
+    experiments_test = ["all"]
+    # experiments_test = [["100_100", '100_050', "100_075", '050_100', "075_100"]]
+
+    # weights_dict = dict.fromkeys(experiments_all)
+    # experiments_test = [["100_100", '100_050', "100_075", "100_030", '050_100', "075_100", "030_100"]]
     for model in models:
-        for idx, experiment in enumerate(experiments_all):
-            dataframe = dataframe_all[dataframe_all['experiment_type'].isin(experiment)]
-            train_data_loader, test_data_loader = init_loaders(dataframe, experiment, experiment)
-            name = "GoreTex_DIC_2_log_16_" + str(experiment) + "_" + str(model.__name__)
-            # name = "test"
+        for idx, experiments in enumerate(list(itertools.product(experiments_all, experiments_test))):
+            experiment, experiment_test = experiments
+            if experiment and experiment_test != "all":
+                dataframe = dataframe_all[dataframe_all['experiment_type'].isin(experiment_test) or dataframe_all['experiment_type'].isin(experiment)]
+            else:
+                dataframe = dataframe_all
+            train_data_loader, test_data_loader = init_loaders(dataframe, experiment, experiment_test)
+            name = "GoreTex_DIC_3_16_l201_" + str(experiment) + "_" + str(model.__name__)
+            name = "test"
             print("----------------------------------------------------------------------")
             print(experiment)
             test_train = Trainer(
                                 plot_valid=False,
-                                epochs=5000,
+                                epochs=10,
                                 experiment_name=name,
-                                l2_reg_coeff=0.0001,
-                                l1_reg_coeff=0.0001,
+                                l2_reg_coeff=0.01,
+                                # l1_reg_coeff=0.001,
                                 learning_rate=0.001,
-                                checkpoint=path,
+                                # checkpoint=path,
                                 model=model,
-                                SingleInvNet=SingleInvNet6
+                                SingleInvNet=SingleInvNet4,
+                                batch_size=batch_size
                                 )
 
             trained_model = test_train.train(train_data_loader, None, weighting_data=False)
@@ -412,23 +613,60 @@ def main():
             print(metrics)
             dataframe.pop("P11")
             dataframe.pop("P22")
+            # r2_mean.append(metrics[metrics["Category"] == "Mean"])
+            # metrics.to_csv(os.path.join(test_train.path_to_save_weights, "metrics.csv"))
+
+            # weights_dict[experiment] = trained_model.potential_constants
+
             r2_mean.append(metrics[metrics["Category"] == "Mean"])
             metrics.to_csv(os.path.join(test_train.path_to_save_weights, "metrics.csv"))
 
+            blocks = trained_model.extract_weights_as_blocks()
+            row = {"Experiment Type": experiment}
+            row.update(blocks)
+            mean_values = metrics.loc[metrics['Category'] == 'Mean', ['PX', 'PY']].values.flatten()
+            row.update({'Mean': (mean_values[0], mean_values[1])})
+            summary_table.append(row)
+            # Преобразование в DataFrame
+
+            # Сохранение таблицы
+        # print(summary_table)
+
+
+
+            # trained_model.path_to_best_weights
+
         plt.show()
-        print(f"Сводная таблица: \n {r2_mean}")
+
+        summary_df = pd.DataFrame(summary_table)
+        print(f"Сводная таблица: \n {summary_table}")
+
+        name = "weights_blocks_summary.csv"
+        output_path = os.path.join("../results", str(experiments_all))
+
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
+        summary_df.to_csv(os.path.join(output_path, name), index=False)
 
 if __name__ == "__main__":
     main()
-    # path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\GoreTex_DIC_2_OffX_ModelArchitecture_I5\20241030_1941_4258.pth"
+    # name = "GoreTex_DIC_3_16_" + str(experiment) + "_" + ModelArchitecture_I5
+
+    # path = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\src\CANN_torch\pretrained_models\GoreTex_DIC_3_16_030_100_ModelArchitecture_I5"
+    # # dir = r"\GoreTex_DIC_3_16_100_500_ModelArchitecture_I5"
+    # pth = r"\20241203_0051_4477" + ".pth"
+    # path = path + pth
     # test_train = Trainer(
     #     checkpoint=path,
     #     model=ModelArchitecture_I5,
+    #     SingleInvNet=SingleInvNet4
+    #
     # )
     # test_train.model.load_state_dict(torch.load(path))
     # test_train.model.get_weights()
     # print(test_train.model.potential_constants)
-    # print(test_train.model.get_potential())
+    # print(test_train.model.get_potential(p=3))
     # print(test_train.model)
     # trained_model = ModelArchitecture_I5()
     # #

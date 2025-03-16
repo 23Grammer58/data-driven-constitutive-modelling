@@ -53,7 +53,7 @@ def preproc_data():
     # data_frames = [load_and_extract(file, file[-11:-4]) for file in experiments_path]
 
     # print(data_frames)
-    path_to_data = r"C:\Users\User\PycharmProjects\data-driven-constitutive-modelling\data\pocine_skin\NODE_porcine_skin_data_1.csv"
+    path_to_data = r"/data/pocine_skin/NODE_porcine_skin_data_1.csv"
 
     all_data = pd.read_csv(path_to_data, index_col=0)
 

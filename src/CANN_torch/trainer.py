@@ -159,7 +159,7 @@ class Trainer:
                     loss += 0.5 * self.l2_reg_coeff * l2_reg
 
                 if self.l2_reg_coeff is not None:
-                    l1_reg = self.model.calc_l1()
+                    l1_reg = self.model.calc_regularization(1)
                     loss += self.l1_reg_coeff * l1_reg
 
                 loss.backward(retain_graph=True)
@@ -219,7 +219,7 @@ class Trainer:
                 # print("------------------------------------------------------------------")
                 best_vloss = avg_vloss
 
-            if epoch - best_epoch > 200 and abs(best_vloss - avg_vloss) < 10e-6: break
+            if epoch - best_epoch > 500 and abs(best_vloss - avg_vloss) < 10e-7: break
 
             elif epoch % 100 == 0:
                 print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')
@@ -246,6 +246,7 @@ class Trainer:
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.title('Training Loss')
+        plt.yscale('log')
         plt.show()
 
         model_path = '{}_{}'.format(self.timestamp, best_epoch)

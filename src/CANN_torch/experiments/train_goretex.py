@@ -19,7 +19,7 @@ import pandas as pd
 from trainer import Trainer
 
 # hyperparameters and paths
-path_to_data = r"..\..\data\GoreTex\1"
+path_to_data = r"../../../data/GoreTex/1"
 experiment_mod = "biaxial"
 num_points = 32
 batch_size = 2
