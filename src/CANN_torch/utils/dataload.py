@@ -60,6 +60,32 @@ def number_to_matrix11(number):
     return matrix
 
 
+def _filter_data_by_protocol(all_data, protocol):
+    """Вспомогательная функция для фильтрации данных по протоколу эксперимента."""
+    if protocol == "all":
+        return all_data.copy()
+
+    # Нормализация типа протокола
+    if isinstance(protocol, str):
+        experiments = [protocol]
+    elif isinstance(protocol, (list, tuple)):
+        experiments = list(protocol)
+    else:
+        raise ValueError(f"Неподдерживаемый тип протокола: {type(protocol)}")
+
+    # Фильтрация данных
+    filtered_data = pd.concat(
+        [all_data[all_data["experiment_type"] == exp] for exp in experiments],
+        ignore_index=True
+    )
+
+    # Проверка на пустые данные
+    if filtered_data.empty:
+        raise ValueError(f"Нет данных для протоколов: {experiments}")
+
+    return filtered_data
+
+
 class ExcelDataset(Dataset):
     """
     A custom PyTorch Dataset for loading mechanical experiments data from Excel files.

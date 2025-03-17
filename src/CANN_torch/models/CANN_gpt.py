@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from CANN_torch.models.potential_zoo import get_psi
+# from CANN_torch.models.potential_zoo import get_psi
+from CANN_torch.utils import get_psi
 # from ..utils.potential_zoo import get_psi
 
 def flatten(l):
@@ -144,17 +145,20 @@ class BaseInvNet(nn.Module):
             for param in self.parameters():
                 param.clamp_(min=0)
 
+
 class SingleInvNet4(BaseInvNet):
     def __init__(self, bias=3):
         activation_functions = ["linear", "exp"]
         polynomial_degree = 2
         super(SingleInvNet4, self).__init__(activation_functions, polynomial_degree, bias=bias)
 
+
 class SingleInvNet6(BaseInvNet):
     def __init__(self, bias=3):
         activation_functions = ["linear", "exp", "ln"]
         polynomial_degree = 2
         super(SingleInvNet6, self).__init__(activation_functions, polynomial_degree, bias=bias)
+
 
 # Define CANN Strain energy
 class StrainEnergy_i5(nn.Module):
@@ -193,6 +197,89 @@ class StrainEnergy_i5(nn.Module):
                 param.clamp_(min=0)
 
 
+class StrainEnergy_i2(nn.Module):
+    def __init__(self, SingleInvNet=SingleInvNet4):
+        super(StrainEnergy_i5, self).__init__()
+        self.I1_net = SingleInvNet(bias=3)
+        self.I2_net = SingleInvNet(bias=3)
+
+        self.terms_count = self.I1_net.terms_count
+        self.invariants_count = sum([1 for module in self.modules() if "SingleInvNet" in module._get_name()])
+        self.all_terms_count = self.terms_count * self.invariants_count
+
+        self.invariants = torch.zeros(self.invariants_count)
+        self.final_layer = nn.Linear(self.all_terms_count, 1, bias=False)
+        # nn.init.constant_(self.final_layer.weight, 1.0)
+        nn.init.uniform_(self.final_layer.weight, 0.01, 1.0)
+
+        # nn.init.xavier_normal_(self.final_layer.weight)
+
+    def forward(self, I1_ref, I2_ref, I4_ref, I5_ref):
+        I1_out = self.I1_net(I1_ref)
+        I2_out = self.I2_net(I2_ref)
+
+        ALL_I_out = torch.cat((I1_out, I2_out), dim=1)
+        W_ANN = self.final_layer(ALL_I_out)
+
+        return W_ANN
+
+    def clamp_weights(self):
+        with torch.no_grad():
+            for param in self.parameters():
+                param.clamp_(min=0)
+
+
+class BaseStrainEnergy(nn.Module):
+    """
+    Базовый класс для расчёта энергии деформации.
+
+    Параметры:
+        invariants_config (list или tuple): последовательность значений смещений (bias) для каждого инварианта.
+            Например, [3, 3, 1, 1] создаст 4 инвариантных сети с соответствующими значениями bias.
+        SingleInvNet (nn.Module): класс нейронной сети для одного инварианта.
+            Он должен принимать аргумент bias при инициализации и иметь атрибут terms_count.
+    """
+
+    def __init__(self, SingleInvNet, invariants_config=np.ones(2)*3):
+        super(BaseStrainEnergy, self).__init__()
+        #
+        # if not invariants_config:
+        #     invariants_config =
+        # Создаем список инвариантных сетей с соответствующими смещениями.
+        self.invariant_nets = nn.ModuleList([SingleInvNet(bias=bias) for bias in invariants_config])
+
+        # Предполагается, что все сети имеют одинаковое число терминов.
+        self.terms_count = self.invariant_nets[0].terms_count
+        self.invariants_count = len(self.invariant_nets)
+        self.all_terms_count = self.terms_count * self.invariants_count
+
+        self.invariants = torch.zeros(self.invariants_count)
+        self.final_layer = nn.Linear(self.all_terms_count, 1, bias=False)
+        nn.init.uniform_(self.final_layer.weight, 0.01, 1.0)
+
+    def forward(self, *invariants_refs):
+        """
+        Параметры:
+            invariants_refs: последовательность входных данных для каждой инвариантной сети.
+                Количество переданных аргументов должно соответствовать количеству инвариантов.
+
+        Возвращает:
+            W_ANN: выходной тензор после объединения результатов всех сетей и пропуска через финальный линейный слой.
+        """
+        if len(invariants_refs) != self.invariants_count:
+            raise ValueError(f"Ожидается {self.invariants_count} входов, получено {len(invariants_refs)}")
+
+        outputs = [net(ref) for net, ref in zip(self.invariant_nets, invariants_refs)]
+        ALL_I_out = torch.cat(outputs, dim=1)
+        W_ANN = self.final_layer(ALL_I_out)
+        return W_ANN
+
+    def clamp_weights(self):
+        with torch.no_grad():
+            for param in self.parameters():
+                param.clamp_(min=0)
+
+
 # Gradient function
 def myGradient(a, b):
     return torch.autograd.grad(outputs=a, inputs=b, grad_outputs=torch.ones_like(a), create_graph=True)[0]
@@ -214,8 +301,8 @@ def Stress_xx_I5_BT(inputs):
     return torch.tensor(stress_1 + stress_2 + stress_3 + stress_4, requires_grad=True)
 
 
-def stress_calc_bx(inputs):
-    dPsidI1, dPsidI2, dPsidI4, dPsidI5, Stretch1, Stretch2, al = inputs
+def stress_calc_bx_iso(inputs):
+    dPsidI1, dPsidI2, Stretch1, Stretch2 = inputs
 
     one = torch.tensor(1.0, dtype=torch.float32)
     two = torch.tensor(2.0, dtype=torch.float32)
@@ -227,19 +314,14 @@ def stress_calc_bx(inputs):
     first_11 = (Stretch1 - one / (Stretch1 ** two * Stretch2 ** two))
     second_11 = (Stretch1 * Stretch2 ** two + one / (Stretch1 * Stretch2 ** two) - one / (Stretch1 ** two) - one / (
                 Stretch2 ** two))
-    fourth_11 = Stretch1 * torch.cos(al) ** two
-    fifth_11 = Stretch1 ** three * torch.cos(al) ** two
 
     first_22 = (Stretch2 - one / (Stretch1 ** two * Stretch2 ** two))
     second_22 = (Stretch1 ** two * Stretch2 + one / (Stretch1 ** two * Stretch2) - one / (Stretch1 ** two) - one / (
                 Stretch2 ** two))
-    fourth_22 = Stretch2 * torch.sin(al) ** two
-    fifth_22 = Stretch2 ** three * torch.sin(al) ** two
 
-    P11 = two * (first_11 * dPsidI1 + second_11 * dPsidI2 + fourth_11 * dPsidI4 + two * fifth_11 * dPsidI5)
-    P22 = two * (first_22 * dPsidI1 + second_22 * dPsidI2 + fourth_22 * dPsidI4 + two * fifth_22 * dPsidI5)
+    P11 = two * (first_11 * dPsidI1 + second_11 * dPsidI2)
+    P22 = two * (first_22 * dPsidI1 + second_22 * dPsidI2)
     return torch.cat((P11, P22), dim=1)
-
 
 # Define H-layer
 class H_Layer_FungBiax_I4I5(nn.Module):
@@ -349,6 +431,98 @@ class ModelArchitecture_I5(nn.Module):
             "e^(I5 - 3) - 1": (w[1, 13], w[0, 13]),
             "(I5 - 3)^2": w[1, 14] * w[0, 14],
             "e^(I5 - 3)^2 - 1": (w[1, 15], w[0, 15]),
+        }
+        # Форматирование значений
+        formatted_blocks = {
+            block: f"{weight[0]:.{p}f}, {weight[1]:.{p}f}" if isinstance(weight, tuple) else f"{weight:.{p}f}" for
+            block, weight in blocks.items()}
+        return formatted_blocks
+
+    def clamp_weights(self):
+        with torch.no_grad():
+            for param in self.parameters():
+                param.clamp_(min=0)
+
+    def calc_regularization(self, l=2):
+        """
+
+        :param l: power
+        :return: sum of potential coefficients to the power of p
+        """
+        if l == 1:
+            return torch.sum(torch.abs(self.potential_constants))
+        else:
+            return torch.sum(self.potential_constants ** l)
+
+
+class ModelArchitecture_I2(nn.Module):
+    def __init__(self, Psi_model=None,  initial_weight=0.1):
+        super(ModelArchitecture_I2, self).__init__()
+
+        if not Psi_model:
+            Psi_model = BaseStrainEnergy(SingleInvNet6, np.array([3, 3]))
+        self.Psi_model = Psi_model
+        self.potential_constants = None
+        self.terms_count = Psi_model.terms_count
+
+    def forward(self, inputs):
+        Stretch_x, Stretch_y = inputs[:2]
+        exp_type = inputs[-1]
+        Stretch_x = Stretch_x.unsqueeze(1).requires_grad_(True)
+        Stretch_y = Stretch_y.unsqueeze(1).requires_grad_(True)
+
+        Stretch_z = 1 / (Stretch_x * Stretch_y)
+        # I1_BT = Stretch_x ** 2 + Stretch_y ** 2 + Stretch_z ** 2
+        # I2_BT = (Stretch_x ** 2) * (Stretch_y ** 2) + 1 / Stretch_x ** 2 + 1 / Stretch_y ** 2
+        I1, I2 = compute_invariants(Stretch_x, Stretch_y, exp_type)
+
+        Psi_BT = self.Psi_model(I1, I2)
+
+        dWI1_BT = myGradient(Psi_BT, I1)
+        dWdI2_BT = myGradient(Psi_BT, I2)
+
+        self.get_weights()
+        return compute_stress((dWI1_BT, dWdI2_BT, Stretch_x, Stretch_y), iso=True)
+        # return torch.cat((Stress_xx_BT, Stress_yy_BT), dim=1)
+
+    def get_weights(self):
+        w1 = []
+        w2 = []
+        for k in self.state_dict():
+            if "invariant" in k:
+                w1.append(self.state_dict()[k].squeeze().item())
+            elif "final" in k:
+                w2 = self.state_dict()[k].squeeze()
+        self.potential_constants = torch.tensor([w1, w2])
+
+    def get_potential(self, p=3):
+
+        if self.potential_constants is None:
+            self.get_weights()
+
+        w = self.potential_constants
+        potential_str = get_psi(w, terms=self.Psi_model.all_terms_count, p=p)
+        return potential_str
+
+    def extract_weights_as_blocks(self, w=None, precision=6):
+        if not w:
+            self.get_weights()
+            w = self.potential_constants
+        p = precision
+        blocks = {
+            "(I1 - 3)":            w[1, 0] * w[0, 0],
+            "e^(I1 - 3) - 1":     (w[1, 1],  w[0, 1]),
+            "ln(1 - (I1 - 3))":   (w[1, 2],  w[0, 2]),
+            "(I1 - 3)^2":          w[1, 3] * w[0, 3],
+            "e^(I1 - 3)^2 - 1":   (w[1, 4],  w[0, 4]),
+            "ln(1 - (I1 - 3)^2)": (w[1, 5],  w[0, 5]),
+            "(I2 - 3)":            w[1, 6] * w[0, 6],
+            "e^(I2 - 3) - 1":     (w[1, 7],  w[0, 7]),
+            "ln(1 - (I2 - 3))":   (w[1, 8],  w[0, 8]),
+            "(I2 - 3)^2":          w[1, 9] * w[0, 9],
+            "e^(I2 - 3)^2 - 1":   (w[1, 10], w[0, 10]),
+            "ln(1 - (I2 - 3)^2)": (w[1, 11], w[0, 11]),
+
         }
         # Форматирование значений
         formatted_blocks = {

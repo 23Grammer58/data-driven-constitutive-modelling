@@ -8,10 +8,13 @@ import os
 import matplotlib.pyplot as plt
 from typing import Optional
 from sklearn.metrics import r2_score
-from models.CNN import *
+from CANN_torch.models import ModelArchitecture_I5, ModelArchitecture_I2
+
+from CANN_torch.models import *
+# from models.CNN import *
 # from models.CNN import StrainEnergyCANN, StrainEnergyCANN_C, StrainEnergyCANN_polinomial3
-from utils.dataload import ExcelDataset, normalize_data
-from utils.visualisation import *
+# from utils.dataload import ExcelDataset, normalize_data
+# from utils.visualisation import *
 import seaborn as sns
 import pandas as pd
 
@@ -60,8 +63,14 @@ class Trainer:
         if model == ModelArchitecture_I5:
             psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet)
             self.model = model(psi_model, setAl=True, init=torch.pi / 2, initial_weight=initial_weight)
+        elif model == ModelArchitecture_I2:
+            # psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet)
+            self.model = model()
+
         else:
-            self.model = model(batch_size, device=device, dtype=dtype)
+            self.model = model()
+
+            # self.model = model(batch_size, device=device, dtype=dtype)
         self.device = device
         self.learning_rate = learning_rate
         self.epochs = epochs
@@ -132,6 +141,7 @@ class Trainer:
 
             for i, data in enumerate(train_loader):
                 features, target = data
+                exp_type = features[-1]
                 # _, _, i1, i2, i4, i5, _, exp_type = features
 
                 optimizer.zero_grad()
@@ -143,11 +153,41 @@ class Trainer:
                 # loss = loss_fn(stress_model, target)
                 # loss = loss.sum()
 
+                # Получаем маски для групп образцов:
+                mask_1000 = (exp_type == 1000)  # для образцов с exp_type == 1000 (одноканальные)
+                mask_other = (exp_type != 1000)  # для остальных (двухканальные)
 
-                loss_xx = loss_fn(stress_model.T[0], target.T[0])
-                loss_yy = loss_fn(stress_model.T[1], target.T[1])
-                loss = loss_xx + loss_yy
-                loss = loss.sum()
+                loss_total = 0.0
+                n_elements = 0  # количество значений, участвующих в суммировании (для последующего усреднения)
+
+                # Обработка образцов с exp_type == 1000 (один канал)
+                if mask_1000.sum() > 0:
+                    # Берём первый канал для этих образцов:
+                    out_1000 = stress_model.T[0, mask_1000]
+                    target_1000 = target.T[0, mask_1000]  # ожидается, что target.T имеет форму (1, batch_size) для этих примеров
+                    loss_1000 = loss_fn(out_1000, target_1000)  # loss_fn должен работать с векторами одинаковой формы
+                    n_elements += mask_1000.sum()  # прибавляем число элементов (один на образец)
+                    loss_total += loss_1000.sum()  # суммируем потери по всем элементам этой группы
+
+                # Обработка образцов с exp_type != 1000 (два канала)
+                if mask_other.sum() > 0:
+                    out_xx = stress_model.T[0, mask_other]
+                    out_yy = stress_model.T[1, mask_other]
+                    target_xx = target.T[0, mask_other]
+                    target_yy = target.T[1, mask_other]
+                    loss_xx = loss_fn(out_xx, target_xx)
+                    loss_yy = loss_fn(out_yy, target_yy)
+                    loss_total += (loss_xx + loss_yy).sum()  # суммируем потери по обоим каналам
+                    n_elements += 2 * mask_other.sum()  # два значения на каждый образец
+                loss = loss_total
+
+                # if exp_type != 1000:
+                #     loss_xx = loss_fn(stress_model.T[0], target.T[0])
+                #     loss_yy = loss_fn(stress_model.T[1], target.T[1])
+                #     loss = loss_xx + loss_yy
+                #     loss = loss.sum()
+                # else:
+                #     loss = loss_fn(stress_model.T, target.T[0])
                 # if weighting_data:
                 #     if exp_type == "Compression":
                 #         loss *= 0.5

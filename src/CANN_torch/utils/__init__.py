@@ -2,14 +2,19 @@
 Utility functions for data loading, visualization and validation
 """
 
-from .dataload import ExcelDataset
-from .visualisation import plot_results
-from .analytical_validation import validate_model
-from .analytical_metric import calculate_metrics
+from .dataload import _filter_data_by_protocol
+from potential_zoo import *
 
+import sys
+
+# Получаем текущий модуль
+current_module = sys.modules[__name__]
+
+# Получаем все имена, определённые в CANN_gpt
+funcs = [name for name in dir(current_module) if not name.startswith('_')]
+
+# Обновляем __all__
 __all__ = [
-    "ExcelDataset",
-    "plot_results",
-    "validate_model",
-    "calculate_metrics"
-] 
+    "_filter_data_by_protocol",
+    *funcs
+]

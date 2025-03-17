@@ -16,7 +16,7 @@ def NeoHookean_psi(I1, I2):
 
 def get_psi(w, terms:int = 6, activation_func = ("exp", "log"), p:int = 3):
     psi = "add view of potential in potential_zoo"
-    if terms == 6:
+    if terms == 12:
         psi =   f" {w[1, 0]                * w[0, 0]:.{p}f} * (I1 - 3) \\\\\
                  + {w[1, 1]:.{p}f} * (e^{{  {w[0, 1]:.{p}f} * (I1 - 3)}} - 1)\\\\\
                  - {w[1, 2]:.{p}f} * ln(1 - {w[0, 2]:.{p}f} * (I1 - 3)) \\\\\
