@@ -6,7 +6,7 @@ build-backend = "poetry.core.masonry.api"
 name = "CANN_torch"
 version = "0.1.0"
 description = "Библиотека для реализации Constitutive Artificial Neural Networks (CANN) на PyTorch"
-authors = ["Your Name <your.email@example.com>"]
+authors = {name = "Dits Daniil", email = "daniil.dits@gmail.com"}
 license = "MIT"
 readme = "README.md"
 
