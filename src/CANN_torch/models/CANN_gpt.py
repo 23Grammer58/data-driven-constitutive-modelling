@@ -2,9 +2,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
+from ..utils.potential_zoo import stress_calc_bx
 
 # from CANN_torch.models.potential_zoo import get_psi
-from CANN_torch.utils import get_psi
+from CANN_torch.utils import compute_stress, compute_invariants, get_psi
 # from ..utils.potential_zoo import get_psi
 
 def flatten(l):
@@ -54,43 +56,6 @@ class SingleInvNet4_old(nn.Module):
 
 
 # Define Invariant building-blocks
-class SingleInvNet6(nn.Module):
-    def __init__(self, bias=3):
-        super(SingleInvNet6, self).__init__()
-        self.layer1 = nn.Linear(1, 1, bias=False)
-        self.layer2 = nn.Linear(1, 1, bias=False)
-        self.layer3 = nn.Linear(1, 1, bias=False)
-        self.layer4 = nn.Linear(1, 1, bias=False)
-        self.layer5 = nn.Linear(1, 1, bias=False)
-        self.layer6 = nn.Linear(1, 1, bias=False)
-
-        self.terms_count = 6
-        self.bias = bias
-        nn.init.uniform_(self.layer1.weight, 0.01, 1.0)
-        nn.init.uniform_(self.layer2.weight, 0.01, 0.1)
-        nn.init.uniform_(self.layer3.weight, 0.01, 1.0)
-        nn.init.uniform_(self.layer4.weight, 0.01, 1.0)
-        nn.init.uniform_(self.layer5.weight, 0.01, 0.1)
-        nn.init.uniform_(self.layer6.weight, 0.01, 1.0)
-        # nn.init.constant_(self.layer2.weight, 0.1)
-        # nn.init.constant_(self.layer3.weight, 1.0)
-        # nn.init.constant_(self.layer4.weight, 0.1)
-
-    def forward(self, I_in):
-        I_ref = I_in - self.bias
-        I_w11 = self.layer1(I_ref)
-        I_w21 = activation_exp(self.layer2(I_ref))
-        I_w31 = activation_ln(self.layer3(I_ref))
-        I_w41 = self.layer4(I_ref ** 2)
-        I_w51 = activation_exp(self.layer5(I_ref ** 2))
-        I_w61 = activation_ln(self.layer6(I_ref))
-
-        return torch.cat((I_w11, I_w21, I_w31, I_w41, I_w51, I_w61), dim=1)
-
-    def clamp_weights(self):
-        with torch.no_grad():
-            for param in self.parameters():
-                param.clamp_(min=0)
 
 
 class BaseInvNet(nn.Module):
@@ -146,6 +111,13 @@ class BaseInvNet(nn.Module):
                 param.clamp_(min=0)
 
 
+class SingleInvNet3(BaseInvNet):
+    def __init__(self, bias=3):
+        activation_functions = ["linear", "exp", "ln"]
+        polynomial_degree = 1
+        super(SingleInvNet3, self).__init__(activation_functions, polynomial_degree, bias=bias)
+
+
 class SingleInvNet4(BaseInvNet):
     def __init__(self, bias=3):
         activation_functions = ["linear", "exp"]
@@ -199,7 +171,7 @@ class StrainEnergy_i5(nn.Module):
 
 class StrainEnergy_i2(nn.Module):
     def __init__(self, SingleInvNet=SingleInvNet4):
-        super(StrainEnergy_i5, self).__init__()
+        super(StrainEnergy_i2, self).__init__()
         self.I1_net = SingleInvNet(bias=3)
         self.I2_net = SingleInvNet(bias=3)
 
@@ -467,11 +439,11 @@ class ModelArchitecture_I2(nn.Module):
 
     def forward(self, inputs):
         Stretch_x, Stretch_y = inputs[:2]
-        exp_type = inputs[-1]
+        exp_type = inputs[-2]
         Stretch_x = Stretch_x.unsqueeze(1).requires_grad_(True)
         Stretch_y = Stretch_y.unsqueeze(1).requires_grad_(True)
 
-        Stretch_z = 1 / (Stretch_x * Stretch_y)
+        # Stretch_z = 1 / (Stretch_x * Stretch_y)
         # I1_BT = Stretch_x ** 2 + Stretch_y ** 2 + Stretch_z ** 2
         # I2_BT = (Stretch_x ** 2) * (Stretch_y ** 2) + 1 / Stretch_x ** 2 + 1 / Stretch_y ** 2
         I1, I2 = compute_invariants(Stretch_x, Stretch_y, exp_type)
@@ -482,7 +454,7 @@ class ModelArchitecture_I2(nn.Module):
         dWdI2_BT = myGradient(Psi_BT, I2)
 
         self.get_weights()
-        return compute_stress((dWI1_BT, dWdI2_BT, Stretch_x, Stretch_y), iso=True)
+        return compute_stress(dWI1_BT, dWdI2_BT, Stretch_x, Stretch_y, exp_type)
         # return torch.cat((Stress_xx_BT, Stress_yy_BT), dim=1)
 
     def get_weights(self):
@@ -509,19 +481,30 @@ class ModelArchitecture_I2(nn.Module):
             self.get_weights()
             w = self.potential_constants
         p = precision
+        # blocks = {
+        #     "(I1 - 3)":            w[1, 0] * w[0, 0],
+        #     "e^(I1 - 3) - 1":     (w[1, 1],  w[0, 1]),
+        #     "ln(1 - (I1 - 3))":   (w[1, 2],  w[0, 2]),
+        #     "(I1 - 3)^2":          w[1, 3] * w[0, 3],
+        #     "e^(I1 - 3)^2 - 1":   (w[1, 4],  w[0, 4]),
+        #     "ln(1 - (I1 - 3)^2)": (w[1, 5],  w[0, 5]),
+        #     "(I2 - 3)":            w[1, 6] * w[0, 6],
+        #     "e^(I2 - 3) - 1":     (w[1, 7],  w[0, 7]),
+        #     "ln(1 - (I2 - 3))":   (w[1, 8],  w[0, 8]),
+        #     "(I2 - 3)^2":          w[1, 9] * w[0, 9],
+        #     "e^(I2 - 3)^2 - 1":   (w[1, 10], w[0, 10]),
+        #     "ln(1 - (I2 - 3)^2)": (w[1, 11], w[0, 11]),
+        #
+        # }
         blocks = {
             "(I1 - 3)":            w[1, 0] * w[0, 0],
             "e^(I1 - 3) - 1":     (w[1, 1],  w[0, 1]),
-            "ln(1 - (I1 - 3))":   (w[1, 2],  w[0, 2]),
-            "(I1 - 3)^2":          w[1, 3] * w[0, 3],
-            "e^(I1 - 3)^2 - 1":   (w[1, 4],  w[0, 4]),
-            "ln(1 - (I1 - 3)^2)": (w[1, 5],  w[0, 5]),
-            "(I2 - 3)":            w[1, 6] * w[0, 6],
-            "e^(I2 - 3) - 1":     (w[1, 7],  w[0, 7]),
-            "ln(1 - (I2 - 3))":   (w[1, 8],  w[0, 8]),
-            "(I2 - 3)^2":          w[1, 9] * w[0, 9],
-            "e^(I2 - 3)^2 - 1":   (w[1, 10], w[0, 10]),
-            "ln(1 - (I2 - 3)^2)": (w[1, 11], w[0, 11]),
+            "(I1 - 3)^2":          w[1, 2] * w[0, 2],
+            "e^(I1 - 3)^2 - 1":   (w[1, 3],  w[0, 3]),
+            "(I2 - 3)":            w[1, 4] * w[0, 4],
+            "e^(I2 - 3) - 1":     (w[1, 5],  w[0, 5]),
+            "(I2 - 3)^2":          w[1, 6] * w[0, 6],
+            "e^(I2 - 3)^2 - 1":   (w[1, 7], w[0,  7]),
 
         }
         # Форматирование значений

@@ -18,7 +18,116 @@ from CANN_torch.models import *
 import seaborn as sns
 import pandas as pd
 
-from models.CANN_gpt import *
+# from models.CANN_gpt import *
+
+def compute_loss_weighted(loss_fn, stress_model, target, exp_type, weight, weighting_data=True):
+    """
+    Вычисляет взвешенный лосс для батча экспериментов с учетом типа эксперимента.
+
+    Предположения:
+      - stress_model имеет форму (2, batch_size).
+      - target имеет форму (batch_size, 2) для биаксиальных экспериментов и (batch_size, 1) для унииальных.
+      - exp_type – тензор формы (batch_size,). Принято, что унииальные эксперименты помечаются значением 1000, а биаксиальные – любым другим.
+      - weight – тензор формы (batch_size,), содержащий вес для каждого образца (предварительно добавленный в preproc_data).
+      - Если weighting_data=False, используется вес 1 для всех образцов.
+
+    Лосс для образцов с унииальным экспериментом (exp_type == 1000) вычисляется только по первому каналу,
+    а для биаксиальных – суммируется лосс по обоим каналам.
+
+    Итоговый лосс вычисляется как сумма (взвешенных) лоссов по всем образцам, деленная на сумму весов.
+    """
+    # Приводим выход модели к форме (batch_size, 2)
+    stress_model_T = stress_model  # shape: (batch_size, 2)
+
+    # Определяем маски для унииальных (например, exp_type == 1000) и биаксиальных экспериментов
+    # mask_uni = (exp_type == "uni")
+    # mask_biaxial = (exp_type != 1000)
+    #
+    mask_uni = torch.tensor([x == "uni" for x in exp_type])
+    mask_biaxial = torch.tensor([x != "uni" for x in exp_type])
+
+    loss_total = 0.0
+    total_weight = 0.0
+
+    # Если взвешивание не требуется, подставляем единичный вес
+    ones_uni = torch.ones_like(exp_type[mask_uni], dtype=stress_model_T.dtype) if mask_uni.sum() > 0 else None
+    ones_biaxial = torch.ones_like(exp_type[mask_biaxial],
+                                   dtype=stress_model_T.dtype) if mask_biaxial.sum() > 0 else None
+
+    # Обработка унииальных экспериментов (exp_type == 1000)
+    if mask_uni.sum() > 0:
+        # Выбираем для каждого образца первый канал (единственный релевантный)
+        out_uni = stress_model_T[mask_uni, 0]  # shape: (N_uni,)
+        target_uni = target[mask_uni, 0]  # shape: (N_uni,)
+        loss_uni = loss_fn(out_uni, target_uni)  # (N_uni,)
+        sample_weight_uni = weight[mask_uni] if weighting_data else ones_uni
+        loss_total += (loss_uni * sample_weight_uni).sum()
+        total_weight += sample_weight_uni.sum()
+
+    # Обработка биаксиальных экспериментов (exp_type != 1000)
+    if mask_biaxial.sum() > 0:
+        out_xx = stress_model_T[mask_biaxial, 0]  # (N_biaxial,)
+        out_yy = stress_model_T[mask_biaxial, 1]  # (N_biaxial,)
+        target_xx = target[mask_biaxial, 0]  # (N_biaxial,)
+        target_yy = target[mask_biaxial, 1]  # (N_biaxial,)
+        loss_xx = loss_fn(out_xx, target_xx)
+        loss_yy = loss_fn(out_yy, target_yy)
+        loss_biaxial = loss_xx + loss_yy  # (N_biaxial,) – суммируем лосс по обоим каналам для каждого образца
+        sample_weight_biaxial = weight[mask_biaxial] if weighting_data else ones_biaxial
+        loss_total += (loss_biaxial * sample_weight_biaxial).sum()
+        total_weight += sample_weight_biaxial.sum()
+
+    return loss_total / total_weight if total_weight > 0 else loss_total
+
+
+def compute_loss(loss_fn, stress_model, target, exp_type):
+    """
+    Вычисляет лосс для батча, содержащего образцы с разными типами экспериментов.
+
+    Предположения:
+      - stress_model имеет форму (2, batch_size)
+      - target имеет форму (batch_size, 2) для образцов с exp_type != 1000,
+        и (batch_size, 1) или (batch_size, 2) для образцов с exp_type == 1000 (в этом случае используется только первый канал)
+      - exp_type имеет форму (batch_size,)
+
+    Для образцов с exp_type == 1000 вычисляется лосс только по первому каналу,
+    для остальных – суммируются лоссы по обоим каналам.
+
+    Итоговый лосс усредняется по общему числу элементов (1 элемент на образец для exp_type == 1000 и 2 элемента на образец для остальных).
+    """
+    # mask_1000 = (exp_type == 1000)
+    # mask_other = (exp_type != 1000)
+
+    mask_1000 = torch.tensor([x == "uni" for x in exp_type])
+    mask_other = torch.tensor([x != "uni" for x in exp_type])
+    loss_total = 0.0
+    n_elements = 0
+
+    # Приводим stress_model к форме (batch_size, 2)
+    stress_model_T = stress_model  # теперь stress_model_T имеет форму (batch_size, 2)
+
+    # Обработка для образцов с exp_type == 1000 (одноканальный лосс)
+    if mask_1000.sum() > 0:
+        out_1000 = stress_model_T[mask_1000, 0]  # выбираем первый канал, форма (N_1000,)
+        target_1000 = target[mask_1000, 0]  # форма (N_1000,)
+        loss_1000 = loss_fn(out_1000, target_1000)
+        loss_total += loss_1000.sum()
+        n_elements += mask_1000.sum()
+
+    # Обработка для образцов с exp_type != 1000 (двухканальный лосс)
+    if mask_other.sum() > 0:
+        out_xx = stress_model_T[mask_other, 0]  # форма (N_other,)
+        out_yy = stress_model_T[mask_other, 1]  # форма (N_other,)
+        target_xx = target[mask_other, 0]  # форма (N_other,)
+        target_yy = target[mask_other, 1]  # форма (N_other,)
+        loss_xx = loss_fn(out_xx, target_xx)
+        loss_yy = loss_fn(out_yy, target_yy)
+        loss_total += (loss_xx + loss_yy).sum()
+        n_elements += 2 * mask_other.sum()
+
+    loss = loss_total / n_elements
+    return loss
+
 
 def r2_score_own(Truth, Prediction):
     R2 = r2_score(Truth,Prediction)
@@ -39,7 +148,7 @@ class Trainer:
                  l2_reg_coeff: Optional[float] = 0.001,
                  dtype = torch.float32,
                  initial_weight = 0.1,
-                 SingleInvNet = SingleInvNet4
+                 SingleInvNet = None
                  ):
         """
         Класс для обучения CANN моделей.
@@ -60,15 +169,20 @@ class Trainer:
 
         self.l1_reg_coeff = l1_reg_coeff
         self.l2_reg_coeff = l2_reg_coeff
+
+        if not SingleInvNet:
+            SingleInvNet = SingleInvNet4
+
         if model == ModelArchitecture_I5:
             psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet)
             self.model = model(psi_model, setAl=True, init=torch.pi / 2, initial_weight=initial_weight)
         elif model == ModelArchitecture_I2:
             # psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet)
-            self.model = model()
-
+            psi_model = BaseStrainEnergy(SingleInvNet)
+            self.model = model(psi_model)
         else:
-            self.model = model()
+            psi_model = BaseStrainEnergy(SingleInvNet)
+            self.model = model(psi_model)
 
             # self.model = model(batch_size, device=device, dtype=dtype)
         self.device = device
@@ -141,53 +255,15 @@ class Trainer:
 
             for i, data in enumerate(train_loader):
                 features, target = data
-                exp_type = features[-1]
+                exp_type = features[-2]
+                weight = features[-1]
                 # _, _, i1, i2, i4, i5, _, exp_type = features
 
                 optimizer.zero_grad()
                 stress_model = self.model(features)
-                # print(target)
-                # print(stress_model)
-                # print(i1, i2, i4, i5)
-                # target = target.squeeze()
-                # loss = loss_fn(stress_model, target)
-                # loss = loss.sum()
 
-                # Получаем маски для групп образцов:
-                mask_1000 = (exp_type == 1000)  # для образцов с exp_type == 1000 (одноканальные)
-                mask_other = (exp_type != 1000)  # для остальных (двухканальные)
+                loss = compute_loss(loss_fn, stress_model, target, exp_type)
 
-                loss_total = 0.0
-                n_elements = 0  # количество значений, участвующих в суммировании (для последующего усреднения)
-
-                # Обработка образцов с exp_type == 1000 (один канал)
-                if mask_1000.sum() > 0:
-                    # Берём первый канал для этих образцов:
-                    out_1000 = stress_model.T[0, mask_1000]
-                    target_1000 = target.T[0, mask_1000]  # ожидается, что target.T имеет форму (1, batch_size) для этих примеров
-                    loss_1000 = loss_fn(out_1000, target_1000)  # loss_fn должен работать с векторами одинаковой формы
-                    n_elements += mask_1000.sum()  # прибавляем число элементов (один на образец)
-                    loss_total += loss_1000.sum()  # суммируем потери по всем элементам этой группы
-
-                # Обработка образцов с exp_type != 1000 (два канала)
-                if mask_other.sum() > 0:
-                    out_xx = stress_model.T[0, mask_other]
-                    out_yy = stress_model.T[1, mask_other]
-                    target_xx = target.T[0, mask_other]
-                    target_yy = target.T[1, mask_other]
-                    loss_xx = loss_fn(out_xx, target_xx)
-                    loss_yy = loss_fn(out_yy, target_yy)
-                    loss_total += (loss_xx + loss_yy).sum()  # суммируем потери по обоим каналам
-                    n_elements += 2 * mask_other.sum()  # два значения на каждый образец
-                loss = loss_total
-
-                # if exp_type != 1000:
-                #     loss_xx = loss_fn(stress_model.T[0], target.T[0])
-                #     loss_yy = loss_fn(stress_model.T[1], target.T[1])
-                #     loss = loss_xx + loss_yy
-                #     loss = loss.sum()
-                # else:
-                #     loss = loss_fn(stress_model.T, target.T[0])
                 # if weighting_data:
                 #     if exp_type == "Compression":
                 #         loss *= 0.5
@@ -203,11 +279,7 @@ class Trainer:
                     loss += self.l1_reg_coeff * l1_reg
 
                 loss.backward(retain_graph=True)
-                # loss.back
-                # ward()
-                # for name, param in self.model.named_parameters():
-                #     if param.grad is not None:
-                #         print(f'{name}: {param.grad.norm()}')
+
                 optimizer.step()
 
                 # turn negative weights to zero
@@ -259,7 +331,7 @@ class Trainer:
                 # print("------------------------------------------------------------------")
                 best_vloss = avg_vloss
 
-            if epoch - best_epoch > 500 and abs(best_vloss - avg_vloss) < 10e-7: break
+            if epoch - best_epoch > 300 and abs(best_vloss - avg_vloss) < 10e-5: break
 
             elif epoch % 100 == 0:
                 print(f'Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.8f}, Test metric: {avg_vloss:.8f}')

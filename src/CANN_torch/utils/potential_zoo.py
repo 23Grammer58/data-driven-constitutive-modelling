@@ -21,6 +21,15 @@ def get_psi(w, terms:int = 6, activation_func = ("exp", "log"), p:int = 3):
         psi =   f" {w[1, 0]                * w[0, 0]:.{p}f} * (I1 - 3) \\\\\
                  + {w[1, 1]:.{p}f} * (e^{{  {w[0, 1]:.{p}f} * (I1 - 3)}} - 1)\\\\\
                  - {w[1, 2]:.{p}f} * ln(1 - {w[0, 2]:.{p}f} * (I1 - 3)) \\\\\
+                  \
+                 + {w[1, 3]                * w[0, 3]:.{p}f} * (I2 - 3) \\\\\
+                 + {w[1, 4]:.{p}f} * (e^{{  {w[0, 4]:.{p}f} * (I2 - 3))}} - 1)\\\\\
+                 - {w[1, 5]:.{p}f} * ln(1 - {w[0, 5]:.{p}f} *  (I2 - 3)) \\\\"
+
+    elif terms == 12:
+        psi =   f" {w[1, 0]                * w[0, 0]:.{p}f} * (I1 - 3) \\\\\
+                 + {w[1, 1]:.{p}f} * (e^{{  {w[0, 1]:.{p}f} * (I1 - 3)}} - 1)\\\\\
+                 - {w[1, 2]:.{p}f} * ln(1 - {w[0, 2]:.{p}f} * (I1 - 3)) \\\\\
                  + {w[1, 3]                * w[0, 3]:.{p}f} * (I1 - 3) ^ 2 \\\\\
                  + {w[1, 4]:.{p}f} * (e^{{  {w[0, 4]:.{p}f} * (I1 - 3) ^ 2}} - 1)\\\\\
                  - {w[1, 5]:.{p}f} * ln(1 - {w[0, 5]:.{p}f} * (I1 - 3) ^ 2) \\\\\
@@ -32,16 +41,16 @@ def get_psi(w, terms:int = 6, activation_func = ("exp", "log"), p:int = 3):
                  + {w[1, 10]:.{p}f} * (e^{{ {w[0, 10]:.{p}f} *(I2 - 3) ^ 2)}} - 1)\\\\\
                  - {w[1, 11]:.{p}f} * ln(1 -{w[0, 11]:.{p}f} * (I2 - 3) ^ 2)\\\\"
 
-    elif terms == 4:
+    elif terms == 8:
         psi =   f" {w[1, 0]                * w[0, 0]:.{p}f} * (I1 - 3) \\\\\
                  + {w[1, 1]:.{p}f} * (e^{{  {w[0, 1]:.{p}f} * (I1 - 3)}} - 1)\\\\\
-                 + {w[1, 2]                * w[0, 3]:.{p}f} * (I1 - 3) ^ 2 \\\\\
-                 + {w[1, 3]:.{p}f} * (e^{{  {w[0, 4]:.{p}f} * (I1 - 3) ^ 2}} - 1)\\\\\
+                 + {w[1, 2]                * w[0, 2]:.{p}f} * (I1 - 3) ^ 2 \\\\\
+                 + {w[1, 3]:.{p}f} * (e^{{  {w[0, 3]:.{p}f} * (I1 - 3) ^ 2}} - 1)\\\\\
                   \
-                 + {w[1, 4]                * w[0, 6]:.{p}f} * (I2 - 3) \\\\\
-                 + {w[1, 5]:.{p}f} * (e^{{  {w[0, 7]:.{p}f} * (I2 - 3))}} - 1)\\\\\
-                 + {w[1, 6]                * w[0, 9]:.{p}f} * (I2 - 3) ^ 2 \\\\\
-                 + {w[1, 7]:.{p}f} * (e^{{ {w[0, 10]:.{p}f} *(I2 - 3) ^ 2)}} - 1)\\\\"
+                 + {w[1, 4]                * w[0, 4]:.{p}f} * (I2 - 3) \\\\\
+                 + {w[1, 5]:.{p}f} * (e^{{  {w[0, 5]:.{p}f} * (I2 - 3))}} - 1)\\\\\
+                 + {w[1, 6]                * w[0, 6]:.{p}f} * (I2 - 3) ^ 2 \\\\\
+                 + {w[1, 7]:.{p}f} * (e^{{ {w[0,  7]:.{p}f} *(I2 - 3) ^ 2)}} - 1)\\\\"
 
     elif terms == 16:
         psi =     f"{w[1, 0]               * w[0, 0]:.{p}f} * (I1 - 3) \\\\\
@@ -105,7 +114,8 @@ def stress_calc_ux(inputs):
     four = torch.tensor(4.0, dtype=torch.float32)
 
     P11 = two * (dPsidI1 + one / Stretch1 * dPsidI2) * (Stretch1 - 1 / Stretch1 ** 2)
-    return torch.cat((P11, one - 1), dim=1)
+    return torch.cat((P11, P11), dim=1)
+    # return P11
 
 
 def stress_calc_bx(inputs, iso=False):
@@ -153,14 +163,14 @@ def compute_invariants(Stretch_x, Stretch_y, exp_type):
     Возвращает:
       I1, I2: тензоры инвариантов формы (batch_size, 1).
     """
-    batch_size = exp_type.shape[0]
-    device = exp_type.device
+    batch_size = Stretch_x.shape[0]
+    device = Stretch_x.device
     I1 = torch.zeros((batch_size, 1), device=device)
     I2 = torch.zeros((batch_size, 1), device=device)
 
     # Маски для разных типов эксперимента
-    mask_1000 = (exp_type == 1000)
-    mask_other = (exp_type != 1000)
+    mask_1000 = torch.tensor([x == "uni" for x in exp_type])
+    mask_other = torch.tensor([x != "uni" for x in exp_type])
 
     # Для образцов с exp_type == 1000 – альтернативное вычисление инвариантов
     if mask_1000.sum() > 0:
@@ -193,13 +203,13 @@ def compute_stress(dWI1_BT, dWdI2_BT, Stretch_x, Stretch_y, exp_type):
     Возвращает:
       stress_out: тензор формы (2, batch_size), где для exp_type==1000 заполнен только первый канал.
     """
-    mask_1000 = (exp_type == 1000)
-    mask_other = (exp_type != 1000)
-    batch_size = exp_type.shape[0]
-    device = exp_type.device
+    mask_1000 = torch.tensor([x == "uni" for x in exp_type])
+    mask_other = torch.tensor([x != "uni" for x in exp_type])
+
+    batch_size = Stretch_x.shape[0]
 
     # Инициализируем итоговый тензор для двух каналов
-    stress_out = torch.zeros((2, batch_size), device=device)
+    stress_out = torch.zeros((2, batch_size))
 
     # Обработка для exp_type == 1000 (одноканальный вывод)
     if mask_1000.sum() > 0:
@@ -207,9 +217,9 @@ def compute_stress(dWI1_BT, dWdI2_BT, Stretch_x, Stretch_y, exp_type):
         dWdI2_1000 = dWdI2_BT[mask_1000]
         Stretch_x_1000 = Stretch_x[mask_1000]
         Stretch_y_1000 = Stretch_y[mask_1000]
-        # stress_calc_bx возвращает тензор формы (1, N_1000)
+        # stress_calc_bx возвращает тензор формы (2, N_1000)
         stress_1000 = stress_calc_ux((dWI1_1000, dWdI2_1000, Stretch_x_1000, Stretch_y_1000))
-        stress_out[0, mask_1000] = stress_1000.squeeze(0)
+        stress_out[0, mask_1000] = stress_1000[:, 0]
 
     # Обработка для остальных типов эксперимента (двухканальный вывод)
     if mask_other.sum() > 0:
@@ -219,6 +229,6 @@ def compute_stress(dWI1_BT, dWdI2_BT, Stretch_x, Stretch_y, exp_type):
         Stretch_y_other = Stretch_y[mask_other]
         # stress_calc_bx возвращает тензор формы (2, N_other)
         stress_other = stress_calc_bx((dWI1_other, dWdI2_other, Stretch_x_other, Stretch_y_other), iso=True)
-        stress_out[:, mask_other] = stress_other
+        stress_out[:, mask_other] = stress_other.T
 
-    return stress_out
+    return stress_out.T

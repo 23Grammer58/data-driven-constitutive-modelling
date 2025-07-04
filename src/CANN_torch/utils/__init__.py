@@ -3,7 +3,8 @@ Utility functions for data loading, visualization and validation
 """
 
 from .dataload import _filter_data_by_protocol
-from potential_zoo import *
+from .potential_zoo import compute_stress, compute_invariants
+from .potential_zoo import *
 
 import sys
 
@@ -18,3 +19,4 @@ __all__ = [
     "_filter_data_by_protocol",
     *funcs
 ]
+
