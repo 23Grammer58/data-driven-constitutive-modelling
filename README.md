@@ -66,7 +66,7 @@ CANN_torch/
 ├── core/                    # Основные компоненты
 │   └── trainer.py          # Класс обучения с weighted loss
 ├── models/                  # Архитектуры моделей
-│   ├── CANN_gpt.py         # ModelArchitecture_I5, I2
+│   ├── CANN.py         # ModelArchitecture_I5, I2
 │   └── CNN.py              # CNN-модификации
 ├── pipeline/                # Унифицированный пайплайн
 │   └── CANN_pipeline.py    # Полный цикл: данные→обучение→результаты
