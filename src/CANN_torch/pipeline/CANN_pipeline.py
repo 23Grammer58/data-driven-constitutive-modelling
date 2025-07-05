@@ -23,6 +23,8 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import r2_score
+import matplotlib
+matplotlib.use('Agg')  # Используем неинтерактивный backend до импорта pyplot
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -39,6 +41,7 @@ logger = logging.getLogger(__name__)
 from CANN_torch.core.trainer import Trainer
 from CANN_torch.models.CANN import ModelArchitecture_I5, SingleInvNet4
 from CANN_torch.models.architecture_factory import ModelArchitectureConfig, ArchitectureFactory
+from CANN_torch.utils.energy_info import EnergyInfo
 
 __all__ = [
     "TrainingConfig",
@@ -307,6 +310,8 @@ def train_and_evaluate(cfg: TrainingConfig) -> Dict[str, Any]:
         plot_valid=False,
     )
     trained_model = trainer.train(train_loader, None, weighting_data=False)
+    # print("trained_model", trained_model)
+    # print("trained_model.potential_constants", trained_model.state_dict)
     trained_model.to(cfg.device).eval()
 
     # 3. Инференс на тесте
@@ -327,7 +332,25 @@ def train_and_evaluate(cfg: TrainingConfig) -> Dict[str, Any]:
 
     # 5. Сохраняем веса / сводную инфу
     torch.save(trained_model.state_dict(), cfg.run_dir / "best_model.pth")
-
+    
+    # 6. Генерируем .energy файл из обученной модели
+    try:
+        # Создаем имя модели на основе протоколов обучения
+        train_str = "_".join(cfg.train_protocols) if isinstance(cfg.train_protocols, list) else str(cfg.train_protocols)
+        model_name = f"CANN_Model_{train_str}"
+        
+        # Генерируем и сохраняем .energy файл
+        energy_file_path = EnergyInfo.save_energy_from_cann(
+            trained_model, 
+            model_name, 
+            str(cfg.run_dir)
+        )
+        
+        logger.info("Сохранен .energy файл: %s", energy_file_path)
+        
+    except Exception as e:
+        logger.warning("Не удалось сгенерировать .energy файл: %s", e)
+    
     summary = {
         "run_dir": str(cfg.run_dir),
         "metrics": metrics_df,
