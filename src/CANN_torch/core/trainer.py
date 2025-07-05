@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from datetime import datetime
 import os
 import matplotlib.pyplot as plt
-from typing import Optional
+from typing import Optional, Union
 from sklearn.metrics import r2_score
 from CANN_torch.models import ModelArchitecture_I5, ModelArchitecture_I2
 
@@ -138,7 +138,7 @@ class Trainer:
     def __init__(self,
                  checkpoint: str = None,
                  experiment_name: Optional[str] = "test",
-                 model: nn.Module = StrainEnergyCANN_Ani,
+                 model: Union[nn.Module, type] = StrainEnergyCANN_Ani,
                  device: Optional[str] = "cpu",
                  learning_rate: float = 0.001,
                  epochs: int = 1000,
@@ -173,18 +173,25 @@ class Trainer:
         if not SingleInvNet:
             SingleInvNet = SingleInvNet4
 
-        if model == ModelArchitecture_I5:
-            psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet)
-            self.model = model(psi_model, setAl=True, init=torch.pi / 2, initial_weight=initial_weight)
-        elif model == ModelArchitecture_I2:
-            # psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet)
-            psi_model = BaseStrainEnergy(SingleInvNet)
-            self.model = model(psi_model)
+        # ----------------------------------------------------------------------------
+        # 1. Если передан ГОТОВЫЙ экземпляр модели → используем без изменений
+        # ----------------------------------------------------------------------------
+        if isinstance(model, nn.Module):
+            self.model = model
         else:
-            psi_model = BaseStrainEnergy(SingleInvNet)
-            self.model = model(psi_model)
+            # ----------------------------------------------------------------------------
+            # 2. Иначе работаем по старой логике, ожидая класс модели
+            # ----------------------------------------------------------------------------
+            if model == ModelArchitecture_I5:
+                psi_model = StrainEnergy_i5(SingleInvNet=SingleInvNet)
+                self.model = model(psi_model, setAl=True, init=torch.pi / 2, initial_weight=initial_weight)
+            elif model == ModelArchitecture_I2:
+                psi_model = BaseStrainEnergy(SingleInvNet)
+                self.model = model(psi_model)
+            else:
+                psi_model = BaseStrainEnergy(SingleInvNet)
+                self.model = model(psi_model)
 
-            # self.model = model(batch_size, device=device, dtype=dtype)
         self.device = device
         self.learning_rate = learning_rate
         self.epochs = epochs

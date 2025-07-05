@@ -363,14 +363,44 @@ class ModelArchitecture_I5(nn.Module):
         # return torch.cat((Stress_xx_BT, Stress_yy_BT), dim=1)
 
     def get_weights(self):
-        w1 = []
-        w2 = []
-        for k in self.state_dict():
-            if "I" in k:
-                w1.append(self.state_dict()[k].squeeze().item())
-            elif "final" in k:
-                w2 = self.state_dict()[k].squeeze()
-        self.potential_constants = torch.tensor([w1, w2])
+        """Сохраняем коэффициенты потенциала в виде тензора [2, N].
+
+        1. w1 — веса внутренних линейных слоёв (SingleInvNet.*.layers.*.weight)
+        2. w2 — веса финального слоя Psi-модели (Psi_model.final_layer.weight)
+
+        Метод теперь работает как для старых I1_net/I2_net…, так и для
+        новых BaseStrainEnergy.invariant_nets.* слоёв.
+        """
+
+        state = self.state_dict()
+        inner_weights: list[float] = []
+        final_weights = None
+
+        for name, param in state.items():
+            # Финальный слой потенциала
+            if "final_layer.weight" in name:
+                final_weights = param.squeeze().clone()
+                continue
+
+            # Линейные слои инвариантных сетей (старый и новый стиль имён)
+            if ("_net." in name and ".layer" in name and name.endswith("weight")) or ("invariant_nets" in name and ".layers." in name and name.endswith("weight")):
+                inner_weights.append(param.squeeze().item())
+
+        if final_weights is None:
+            raise RuntimeError("Не найден вес финального слоя Psi_model.final_layer.weight – проверьте модель")
+
+        if len(inner_weights) != final_weights.numel():
+            # Для безопасности, но продолжаем работу, заполняя недостающие нулями / обрезая лишнее
+            min_len = min(len(inner_weights), final_weights.numel())
+            inner_weights = inner_weights[:min_len]
+            final_weights = final_weights[:min_len]
+
+        self.potential_constants = torch.stack(
+            (
+                torch.tensor(inner_weights, dtype=final_weights.dtype, device=final_weights.device),
+                final_weights.clone(),
+            )
+        )
 
     def get_potential(self, p=3):
 
@@ -458,14 +488,32 @@ class ModelArchitecture_I2(nn.Module):
         # return torch.cat((Stress_xx_BT, Stress_yy_BT), dim=1)
 
     def get_weights(self):
-        w1 = []
-        w2 = []
-        for k in self.state_dict():
-            if "invariant" in k:
-                w1.append(self.state_dict()[k].squeeze().item())
-            elif "final" in k:
-                w2 = self.state_dict()[k].squeeze()
-        self.potential_constants = torch.tensor([w1, w2])
+        """Аналогичная логика для I2-архитектуры (2 инварианта)."""
+
+        state = self.state_dict()
+        inner_weights: list[float] = []
+        final_weights = None
+
+        for name, param in state.items():
+            if "final_layer.weight" in name:
+                final_weights = param.squeeze().clone()
+                continue
+            if ("invariant_nets" in name and ".layers." in name and name.endswith("weight")) or ("I" in name and ".layer" in name and name.endswith("weight")):
+                inner_weights.append(param.squeeze().item())
+
+        if final_weights is None:
+            raise RuntimeError("Не найден вес финального слоя Psi_model.final_layer.weight – проверьте модель")
+
+        min_len = min(len(inner_weights), final_weights.numel())
+        inner_weights = inner_weights[:min_len]
+        final_weights = final_weights[:min_len]
+
+        self.potential_constants = torch.stack(
+            (
+                torch.tensor(inner_weights, dtype=final_weights.dtype, device=final_weights.device),
+                final_weights.clone(),
+            )
+        )
 
     def get_potential(self, p=3):
 

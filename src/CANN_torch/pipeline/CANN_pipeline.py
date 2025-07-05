@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------------------
 from CANN_torch.core.trainer import Trainer
 from CANN_torch.models.CANN_gpt import ModelArchitecture_I5, SingleInvNet4
+from CANN_torch.models.architecture_factory import ModelArchitectureConfig, ArchitectureFactory
 
 __all__ = [
     "TrainingConfig",
@@ -70,8 +71,11 @@ class TrainingConfig:
     l2_reg_coeff: float = 1e-2
 
     # Классы моделей
-    model_cls: Callable[..., torch.nn.Module] = ModelArchitecture_I5
-    single_inv_net_cls: Callable[..., torch.nn.Module] = SingleInvNet4
+    model_cls: Callable[..., torch.nn.Module] = ModelArchitecture_I5  # legacy
+    single_inv_net_cls: Callable[..., torch.nn.Module] = SingleInvNet4  # legacy
+
+    # Конфиг для гибкой генерации модели (если задан – имеет приоритет над model_cls)
+    architecture_cfg: Optional[ModelArchitectureConfig] = None
 
     # Аппаратные настройки
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -296,8 +300,8 @@ def train_and_evaluate(cfg: TrainingConfig) -> Dict[str, Any]:
         experiment_name=str(cfg.run_dir.name),
         l2_reg_coeff=cfg.l2_reg_coeff,
         learning_rate=cfg.learning_rate,
-        model=cfg.model_cls,
-        SingleInvNet=cfg.single_inv_net_cls,
+        model=ArchitectureFactory.create_model_architecture(cfg.architecture_cfg) if cfg.architecture_cfg else cfg.model_cls,
+        SingleInvNet=None if cfg.architecture_cfg else cfg.single_inv_net_cls,
         batch_size=cfg.batch_size,
         checkpoint=cfg.checkpoint_path,
         plot_valid=False,

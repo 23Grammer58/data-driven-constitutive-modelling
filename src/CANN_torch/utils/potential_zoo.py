@@ -169,8 +169,8 @@ def compute_invariants(Stretch_x, Stretch_y, exp_type):
     I2 = torch.zeros((batch_size, 1), device=device)
 
     # Маски для разных типов эксперимента
-    mask_1000 = torch.tensor([x == "uni" for x in exp_type])
-    mask_other = torch.tensor([x != "uni" for x in exp_type])
+    mask_1000 = torch.tensor([x == "uni" for x in exp_type], dtype=torch.bool, device=device)
+    mask_other = ~mask_1000
 
     # Для образцов с exp_type == 1000 – альтернативное вычисление инвариантов
     if mask_1000.sum() > 0:
@@ -203,13 +203,14 @@ def compute_stress(dWI1_BT, dWdI2_BT, Stretch_x, Stretch_y, exp_type):
     Возвращает:
       stress_out: тензор формы (2, batch_size), где для exp_type==1000 заполнен только первый канал.
     """
-    mask_1000 = torch.tensor([x == "uni" for x in exp_type])
-    mask_other = torch.tensor([x != "uni" for x in exp_type])
+    device = Stretch_x.device
+    mask_1000 = torch.tensor([x == "uni" for x in exp_type], dtype=torch.bool, device=device)
+    mask_other = ~mask_1000
 
     batch_size = Stretch_x.shape[0]
 
     # Инициализируем итоговый тензор для двух каналов
-    stress_out = torch.zeros((2, batch_size))
+    stress_out = torch.zeros((2, batch_size), device=Stretch_x.device, dtype=Stretch_x.dtype)
 
     # Обработка для exp_type == 1000 (одноканальный вывод)
     if mask_1000.sum() > 0:

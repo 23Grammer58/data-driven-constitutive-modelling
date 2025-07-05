@@ -17,6 +17,7 @@ Neural network models for constitutive equations
 from .CNN import StrainEnergyCANN_Ani
 from .CANN_gpt import *  # Импортируем всё из CANN_gpt
 from .potential_zoo import *
+from .architecture_factory import InvNetConfig, StrainEnergyConfig, ArchitectureFactory, ModelArchitectureConfig
 
 # Динамически добавляем имена из CANN_gpt в __all__
 import sys
@@ -30,5 +31,9 @@ cann_gpt_names = [name for name in dir(current_module) if not name.startswith('_
 # Обновляем __all__
 __all__ = [
     "StrainEnergyCANN_Ani",  # Добавляем явно, если нужно
-    *cann_gpt_names  # Добавляем все имена из CANN_gpt
+    *cann_gpt_names,  # Добавляем все имена из CANN_gpt
+    "InvNetConfig",
+    "StrainEnergyConfig",
+    "ArchitectureFactory",
+    "ModelArchitectureConfig"
 ]
