@@ -18,7 +18,7 @@ from CANN_torch.models import *
 import seaborn as sns
 import pandas as pd
 
-# from models.CANN_gpt import *
+# from models.CANN import *
 
 def compute_loss_weighted(loss_fn, stress_model, target, exp_type, weight, weighting_data=True):
     """

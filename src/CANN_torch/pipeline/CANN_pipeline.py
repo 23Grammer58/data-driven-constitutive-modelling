@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # Импорт доменных модулей проекта
 # --------------------------------------------------------------------------------------
 from CANN_torch.core.trainer import Trainer
-from CANN_torch.models.CANN_gpt import ModelArchitecture_I5, SingleInvNet4
+from CANN_torch.models.CANN import ModelArchitecture_I5, SingleInvNet4
 from CANN_torch.models.architecture_factory import ModelArchitectureConfig, ArchitectureFactory
 
 __all__ = [

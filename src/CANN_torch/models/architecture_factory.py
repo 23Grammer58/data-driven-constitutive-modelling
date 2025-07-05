@@ -10,7 +10,7 @@ from __future__ import annotations
 from CANN_torch.models.architecture_factory import (
     InvNetConfig, StrainEnergyConfig, ArchitectureFactory,
 )
-from CANN_torch.models.CANN_gpt import ModelArchitecture_I2
+from CANN_torch.models.CANN import ModelArchitecture_I2
 
 # 1. Формируем конфигурацию (обычно приходит из JSON запроса)
 inv_cfg = InvNetConfig(
@@ -37,7 +37,7 @@ from typing import List, Sequence, Type
 import numpy as np
 import torch.nn as nn
 
-from .CANN_gpt import BaseInvNet, BaseStrainEnergy  # базовые классы
+from .CANN import BaseInvNet, BaseStrainEnergy  # базовые классы
 
 __all__ = [
     "InvNetConfig",
@@ -121,7 +121,7 @@ class ModelArchitectureConfig:
 __all__.extend(["ModelArchitectureConfig"])
 
 # Импортируем модели только после объявления __all__, чтобы избежать циклов
-from .CANN_gpt import ModelArchitecture_I2, ModelArchitecture_I5  # noqa: E402  pylint: disable=C0413
+from .CANN import ModelArchitecture_I2, ModelArchitecture_I5  # noqa: E402  pylint: disable=C0413
 
 
 class ArchitectureFactory:
