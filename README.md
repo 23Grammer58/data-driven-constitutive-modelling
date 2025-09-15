@@ -1,4 +1,4 @@
-# CANN_torch
+# CANNt
 
 Библиотека для реализации Constitutive Artificial Neural Networks (CANN) с использованием PyTorch для задач идентификации конститутивных зависимостей в механике деформируемого твёрдого тела.
 
