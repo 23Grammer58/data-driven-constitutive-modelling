@@ -257,20 +257,20 @@ def myGradient(a, b):
     return torch.autograd.grad(outputs=a, inputs=b, grad_outputs=torch.ones_like(a), create_graph=True)[0]
 
 
-# Definition of stress
-def Stress_xx_I5_BT(inputs):
-    (dPsidI1, dPsidI2, dWdI4, dWdI5, Stretch, Stretch_z, I1, h11, h11_i5) = inputs
+# # Definition of stress
+# def Stress_xx_I5_BT(inputs):
+#     (dPsidI1, dPsidI2, dWdI4, dWdI5, Stretch, Stretch_z, I1, h11, h11_i5) = inputs
 
-    one = torch.tensor(1.0)
-    two = torch.tensor(2.0)
-    four = torch.tensor(4.0)
+#     one = torch.tensor(1.0)
+#     two = torch.tensor(2.0)
+#     four = torch.tensor(4.0)
 
-    stress_1 = two * (dPsidI1 + I1 * dPsidI2) * (Stretch ** two - Stretch_z ** two)
-    stress_2 = two * dPsidI2 * (Stretch_z ** four - Stretch ** four)
-    stress_3 = two * dWdI4 * h11
-    stress_4 = four * dWdI5 * h11_i5
+#     stress_1 = two * (dPsidI1 + I1 * dPsidI2) * (Stretch ** two - Stretch_z ** two)
+#     stress_2 = two * dPsidI2 * (Stretch_z ** four - Stretch ** four)
+#     stress_3 = two * dWdI4 * h11
+#     stress_4 = four * dWdI5 * h11_i5
 
-    return torch.tensor(stress_1 + stress_2 + stress_3 + stress_4, requires_grad=True)
+#     return torch.tensor(stress_1 + stress_2 + stress_3 + stress_4, requires_grad=True)
 
 
 def stress_calc_bx_iso(inputs):

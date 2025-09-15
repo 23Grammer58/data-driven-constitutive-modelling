@@ -29,8 +29,8 @@ def test_architecture_factory():
     
     # 2) Энергия деформации — 4 инварианта: I1,I2 (+смещение 3) и I4,I5 (+смещение 1)
     se_cfg = StrainEnergyConfig(
-        invariants_config=[3.0, 3.0],   # изотропная модель (I1,I2)
-        # invariants_config=[3.0, 3.0, 1.0, 1.0],   # анизотропная модель (I1,I2,I4,I5)
+        # invariants_config=[3.0, 3.0],   # изотропная модель (I1,I2)
+        invariants_config=[3.0, 3.0, 1.0, 1.0],   # анизотропная модель (I1,I2,I4,I5)
         inv_net_config=inv_cfg,
     )
     
@@ -39,7 +39,7 @@ def test_architecture_factory():
         architecture_type="auto",
         strain_energy_cfg=se_cfg,
         setAl=True,
-        init_alpha=0.1,
+        init_alpha=1.1780972450961724,
     )
     
     print("✅ Конфигурация создана:")
@@ -78,11 +78,11 @@ def test_full_pipeline():
     
     # Конфигурация обучения
     train_cfg = TrainingConfig(
-        experiment_dir="data/GoreTex/2/DIC/3",
-        train_protocols=["100_100", "uni"],
-        test_protocols=["100_100"],
-        epochs=2,  # быстрый тест
-        batch_size=8,
+        experiment_dir=r"C:\Users\user\work\ml\data-driven-constitutive-modelling\src\CANN_torch\data",
+        train_protocols="all",
+        test_protocols="all",
+        epochs=2000,  # быстрый тест
+        batch_size=16,
         architecture_cfg=arch_cfg,  # используем фабрику
         output_root="results_test",
     )
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     arch_cfg, model = test_architecture_factory()
     
     # Тест 2: Полный пайплайн (если есть данные)
-    data_dir = Path("data/GoreTex/2/DIC/3")
+    data_dir = Path(r"C:\Users\user\work\ml\data-driven-constitutive-modelling\src\CANN_torch\data")
     if data_dir.exists():
         results = test_full_pipeline()
         print(f"\n🎉 Все тесты прошли успешно!")

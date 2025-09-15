@@ -14,9 +14,9 @@ Neural network models for constitutive equations
 #     "ModelArchitecture_I5"
 # ]
 
-from .CNN import StrainEnergyCANN_Ani
+# from .CNN import StrainEnergyCANN_Ani  # Модуль CNN не существует
 from .CANN import *  # Импортируем всё из CANN
-from .potential_zoo import *
+# from .potential_zoo import *  # Модуль potential_zoo не существует в models
 from .architecture_factory import InvNetConfig, StrainEnergyConfig, ArchitectureFactory, ModelArchitectureConfig
 
 # Динамически добавляем имена из CANN в __all__
@@ -30,7 +30,7 @@ cann_names = [name for name in dir(current_module) if not name.startswith('_')]
 
 # Обновляем __all__
 __all__ = [
-    "StrainEnergyCANN_Ani",  # Добавляем явно, если нужно
+    # "StrainEnergyCANN_Ani",  # Модуль CNN не существует
     *cann_names,  # Добавляем все имена из CANN
     "InvNetConfig",
     "StrainEnergyConfig",
