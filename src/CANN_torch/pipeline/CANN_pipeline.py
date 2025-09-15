@@ -120,7 +120,7 @@ class TrainingConfig:
 # --------------------------------------------------------------------------------------
 
 CSV_COLUMNS_RAW = ["# Xlam", "PX", "Ylam", "PY", "experiment_type"]
-CSV_COLUMNS_RENAMED = ["lamx", "Px", "lamy", "Py", "experiment_type"]
+CSV_COLUMNS_RENAMED = ["lamx", "Px_exp", "lamy", "Py_exp", "experiment_type"]
 
 
 def _discover_experiment_files(experiment_dir: Path) -> List[Path]:
@@ -149,7 +149,7 @@ def load_experiment_dataframe(experiment_dir: Union[str, Path]) -> pd.DataFrame:
     df = pd.concat(frames).reset_index(drop=True)
     df.columns = CSV_COLUMNS_RENAMED  # переименовываем
     # Удаляем NaN и конвертируем в float32 для Torch
-    df = df.dropna().astype({"lamx": float, "lamy": float, "Px": float, "Py": float})
+    df = df.dropna().astype({"lamx": float, "lamy": float, "Px_exp": float, "Py_exp": float})
     logger.info("Собранный датафрейм: %d строк, колонки: %s", len(df), list(df.columns))
     return df
 
@@ -174,7 +174,7 @@ class SimpleTensorDataset(Dataset):
 
         # tensors
         self.features_xy = torch.as_tensor(df[["lamx", "lamy"]].values, dtype=torch.float32)
-        self.targets     = torch.as_tensor(df[["Px", "Py"]].values,  dtype=torch.float32)
+        self.targets     = torch.as_tensor(df[["Px_exp", "Py_exp"]].values,  dtype=torch.float32)
         self.exp_type    = df["experiment_type"].values  # list[str]
         self.weights     = torch.as_tensor(df["weight"].values, dtype=torch.float32)
 
@@ -229,42 +229,60 @@ def create_dataloaders(
 # --------------------------------------------------------------------------------------
 
 def _plot_predictions_by_protocol(df: pd.DataFrame, out_dir: Path, prefix: str = "plot") -> pd.DataFrame:
-    """Строит графики P11/P22 vs Stress и возвращает DataFrame c R2 значениями."""
+    """Строит графики Px/Py vs Stretch и возвращает DataFrame c R2 значениями.
+
+    Важно: никакого переименования по позициям. Сначала приводим ИМЕНА колонок
+    к стандарту, затем явно задаём порядок столбцов, чтобы исключить путаницу.
+    """
     df = df.copy()
-    df.columns = [
-        "lambda_x",
-        "lambda_y",
-        "stress_x",
-        "stress_y",
-        "experiment_type",
-        "P11",
-        "P22",
-    ]
+    # Приводим возможные альтернативные имена к стандарту
+    rename_map = {
+        "lambda_x": "lamx",
+        "lambda_y": "lamy",
+        "P11_exp": "Px_exp",
+        "P22_exp": "Py_exp",
+        "P11_pred": "Px_pred",
+        "P22_pred": "Py_pred",
+    }
+    df = df.rename(columns=rename_map)
+
+    # Гарантируем наличие требуемых столбцов
+    req_cols = ["lamx", "lamy", "Px_exp", "Py_exp", "experiment_type", "Px_pred", "Py_pred"]
+    missing = [c for c in req_cols if c not in df.columns]
+    if missing:
+        raise KeyError(f"Не хватает колонок для построения графиков: {missing}")
+
+    # Явно упорядочиваем столбцы (без изменения данных)
+    df = df[req_cols]
 
     exp_types = df["experiment_type"].unique()
     r2s: Dict[str, Tuple[float, float]] = {}
 
-    # Один общий график для всех протоколов по lambda_x
+    # Один общий график для всех протоколов по lamx
     plt.figure(figsize=(12, 6))
     for exp in exp_types:
         sub = df[df["experiment_type"] == exp]
-        sns.lineplot(data=sub, x="lambda_x", y="P11", label=f"P11-{exp}")
-        sns.scatterplot(data=sub, x="lambda_x", y="stress_x", marker="o", color="red")
-        r2_p11 = max(r2_score(sub["stress_x"], sub["P11"]), 0.0)
-        r2s.setdefault(exp, [None, None])[0] = r2_p11
-    plt.title("P11 vs Stress X (all protocols)")
+        sns.lineplot(data=sub, x="lamx", y="Px_pred", label=f"Px_pred-{exp}")
+        sns.scatterplot(data=sub, x="lamx", y="Px_exp", marker="o", color="red", label=f"Px_exp-{exp}")
+        r2_px = max(r2_score(sub["Px_pred"], sub["Px_exp"]), 0.0)
+        r2s.setdefault(exp, [None, None])[0] = r2_px
+    plt.title("Px vs lamx (all protocols)")
+    plt.xlabel("lamx")
+    plt.ylabel("Px")
     plt.savefig(out_dir / f"{prefix}_all_x.png")
     plt.close()
 
-    # Общий график по lambda_y
+    # Общий график по lamy
     plt.figure(figsize=(12, 6))
     for exp in exp_types:
         sub = df[df["experiment_type"] == exp]
-        sns.lineplot(data=sub, x="lambda_y", y="P22", label=f"P22-{exp}")
-        sns.scatterplot(data=sub, x="lambda_y", y="stress_y", marker="o", color="blue")
-        r2_p22 = max(r2_score(sub["stress_y"], sub["P22"]), 0.0)
-        r2s.setdefault(exp, [None, None])[1] = r2_p22
-    plt.title("P22 vs Stress Y (all protocols)")
+        sns.lineplot(data=sub, x="lamy", y="Py_pred", label=f"Py_pred-{exp}")
+        sns.scatterplot(data=sub, x="lamy", y="Py_exp", marker="o", color="blue", label=f"Py_exp-{exp}")
+        r2_py = max(r2_score(sub["Py_pred"], sub["Py_exp"]), 0.0)
+        r2s.setdefault(exp, [None, None])[1] = r2_py
+    plt.title("Py vs lamy (all protocols)")
+    plt.xlabel("lamy")
+    plt.ylabel("Py")
     plt.savefig(out_dir / f"{prefix}_all_y.png")
     plt.close()
 
@@ -326,8 +344,8 @@ def train_and_evaluate(cfg: TrainingConfig) -> Dict[str, Any]:
 
     # 4. Собираем DataFrame для визуализации
     df_res = df_test.copy().reset_index(drop=True)
-    df_res["P11"] = preds_np[:, 0]
-    df_res["P22"] = preds_np[:, 1]
+    df_res["Px_pred"] = preds_np[:, 0]
+    df_res["Py_pred"] = preds_np[:, 1]
     metrics_df = _plot_predictions_by_protocol(df_res, cfg.run_dir)
 
     # 5. Сохраняем веса / сводную инфу

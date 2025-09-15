@@ -138,7 +138,7 @@ class Trainer:
     def __init__(self,
                  checkpoint: str = None,
                  experiment_name: Optional[str] = "test",
-                 model: Union[nn.Module, type] = StrainEnergyCANN_Ani,
+                 model: Union[nn.Module, type] = ModelArchitecture_I5,
                  device: Optional[str] = "cpu",
                  learning_rate: float = 0.001,
                  epochs: int = 1000,
@@ -281,7 +281,7 @@ class Trainer:
                     l2_reg = self.model.calc_regularization(2)
                     loss += 0.5 * self.l2_reg_coeff * l2_reg
 
-                if self.l2_reg_coeff is not None:
+                if self.l1_reg_coeff is not None:
                     l1_reg = self.model.calc_regularization(1)
                     loss += self.l1_reg_coeff * l1_reg
 
